@@ -1,18 +1,23 @@
 <!DOCTYPE html>
 <!-- saved from url=(0029)https://webmmd.pages.dev/ -->
-<html lang="ja"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>webmmd</title>
-    <meta name="theme-color" content="#0b1118">
-    <link rel="manifest" href="./manifest.webmanifest">
-    <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml">
-    <script src="./webmmd_files/ammo.js"></script>
-    <script type="module" crossorigin="" src="./webmmd_files/index-4WVB8kZJ.js"></script>
-    <link rel="stylesheet" crossorigin="" href="./webmmd_files/index-BRZrvofv.css">
-  </head>
-  <body>
-    <div id="app"><div class="app-shell">
+<html lang="ja">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>webmmd</title>
+  <meta name="theme-color" content="#0b1118">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml">
+  <script src="./webmmd_files/ammo.js"></script>
+  <script type="module" crossorigin="" src="./webmmd_files/script.js"></script>
+  <link rel="stylesheet" crossorigin="" href="./webmmd_files/style.css">
+</head>
+
+<body>
+  <div id="app">
+    <div class="app-shell">
       <aside class="sidebar">
         <header class="brand">
           <h1>webmmd</h1>
@@ -29,6 +34,37 @@
             </span>
           </label>
         </section>
+        <section class="panel">
+          <label class="field" hidden="">
+            <span>モーション (.vmd)</span>
+            <input class="motion-input" type="file" multiple="" disabled="">
+            <span class="pending-load pending-motion-load" hidden=""></span>
+            <span class="file-error file-error--motion" hidden=""></span>
+          </label>
+          <div class="motion-list" hidden="">
+            <p class="motion-empty">VMD は未選択です。</p>
+          </div>
+          <div class="playback-button-row" hidden="">
+            <button class="action-button play-pause-button" type="button" disabled="">再生</button>
+            <button class="action-button reset-button" type="button" disabled="">
+              リセット
+            </button>
+          </div>
+          <label class="checkbox-field" hidden="">
+            <input class="loop-input" type="checkbox">
+            <span>ループ</span>
+          </label>
+        </section>
+        <section class="panel">
+          <label class="field">
+            <span>カメラVMD</span>
+            <input class="camera-motion-input" type="file" multiple="">
+            <span class="pending-load pending-camera-motion-load" hidden=""></span>
+            <span class="file-error file-error--camera" hidden=""></span>
+          </label>
+          <div class="camera-motion-list"><label class="motion-entry"><input type="radio"
+                name="camera-motion"><span>なし</span></label></div>
+        </section>
         <section class="panel material-override-panel" hidden="">
           <span class="debug-material-title">透明マテリアル制御</span>
           <div class="material-override-actions">
@@ -40,34 +76,6 @@
             </button>
           </div>
           <ul class="material-override-list"></ul>
-        </section>
-        <section class="panel">
-          <label class="field">
-            <span>モーション (.vmd)</span>
-            <input class="motion-input" type="file" multiple="" disabled="">
-            <span class="pending-load pending-motion-load" hidden=""></span>
-            <span class="file-error file-error--motion" hidden=""></span>
-          </label>
-          <div class="motion-list"><p class="motion-empty">VMD は未選択です。</p></div>
-          <div class="playback-button-row">
-            <button class="action-button play-pause-button" type="button" disabled="">再生</button>
-            <button class="action-button reset-button" type="button" disabled="">
-              リセット
-            </button>
-          </div>
-          <label class="checkbox-field">
-            <input class="loop-input" type="checkbox">
-            <span>ループ</span>
-          </label>
-        </section>
-        <section class="panel">
-          <label class="field">
-            <span>カメラ VMD</span>
-            <input class="camera-motion-input" type="file" multiple="">
-            <span class="pending-load pending-camera-motion-load" hidden=""></span>
-            <span class="file-error file-error--camera" hidden=""></span>
-          </label>
-          <div class="camera-motion-list"><label class="motion-entry"><input type="radio" name="camera-motion"><span>なし</span></label></div>
         </section>
         <section class="panel camera-controls-panel" hidden="">
           <label class="checkbox-field">
@@ -81,14 +89,16 @@
                 <input class="gyro-mode-input" type="radio" name="gyro-mode" value="viewpoint" checked="" disabled="">
                 <span>視点回転</span>
               </label>
-              <input class="gyro-sensitivity-input gyro-sensitivity-input--viewpoint" type="range" min="0.1" max="3.0" step="0.05" disabled="">
+              <input class="gyro-sensitivity-input gyro-sensitivity-input--viewpoint" type="range" min="0.1" max="3.0"
+                step="0.05" disabled="">
             </div>
             <div class="gyro-mode-row">
               <label class="checkbox-field">
                 <input class="gyro-mode-input" type="radio" name="gyro-mode" value="modelCenter" disabled="">
                 <span>モデル中心</span>
               </label>
-              <input class="gyro-sensitivity-input gyro-sensitivity-input--model-center" type="range" min="0.1" max="3.0" step="0.05" disabled="">
+              <input class="gyro-sensitivity-input gyro-sensitivity-input--model-center" type="range" min="0.1"
+                max="3.0" step="0.05" disabled="">
             </div>
           </div>
           <button class="action-button gyro-recalibrate-button" type="button" disabled="">
@@ -133,7 +143,8 @@
             </label>
             <label class="field">
               <span>衝撃感度</span>
-              <input class="physics-sensor-impulse-sensitivity-input" type="range" min="0.1" max="3.0" step="0.05" disabled="">
+              <input class="physics-sensor-impulse-sensitivity-input" type="range" min="0.1" max="3.0" step="0.05"
+                disabled="">
             </label>
             <button class="action-button physics-sensor-recalibrate-button" type="button" disabled="">
               物理センサー基準姿勢リセット
@@ -171,7 +182,8 @@
           <p class="sidebar-footer__notice">
             読み込んだ各ファイルは一切アップロードされません。ブラウザのローカルストレージに保存され、ユーザ自身は再利用可能です。「キャッシュをクリア」ボタンによりローカルストレージの内容を削除できます。
           </p>
-          <a class="sidebar-footer__link" href="https://webmmd.pages.dev/licenses.txt" target="_blank" rel="noopener noreferrer">
+          <a class="sidebar-footer__link" href="https://webmmd.pages.dev/licenses.txt" target="_blank"
+            rel="noopener noreferrer">
             ライセンス情報
           </a>
         </footer>
@@ -183,41 +195,39 @@
         </div>
         <div class="viewer-overlay">
           <button class="overlay-button fullscreen-toggle" type="button" aria-label="全画面表示">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M8 3H3v5h2V5h3V3Zm8 0v2h3v3h2V3h-5ZM5 16H3v5h5v-2H5v-3Zm14 3h-3v2h5v-5h-2v3Z"></path>
-  </svg>
-</button>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 3H3v5h2V5h3V3Zm8 0v2h3v3h2V3h-5ZM5 16H3v5h5v-2H5v-3Zm14 3h-3v2h5v-5h-2v3Z"></path>
+            </svg>
+          </button>
           <button class="overlay-button overlay-playback-toggle" type="button" aria-label="再生" hidden="" disabled="">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M8 5v14l11-7L8 5Z"></path>
-  </svg>
-</button>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 5v14l11-7L8 5Z"></path>
+            </svg>
+          </button>
           <button class="overlay-button overlay-reset-button" type="button" aria-label="リセット" hidden="" disabled="">
-            
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M12 5a7 7 0 1 1-6.32 4H3l4-4 4 4H8.05A5 5 0 1 0 12 7V5Z"></path>
-  </svg>
+
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5a7 7 0 1 1-6.32 4H3l4-4 4 4H8.05A5 5 0 1 0 12 7V5Z"></path>
+            </svg>
 
           </button>
-          <button class="overlay-button overlay-gyro-recalibrate-button" type="button" aria-label="視点リセット" hidden="" disabled="">
-            
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M12 4a8 8 0 0 1 7.45 5.05l-1.86.74A6 6 0 1 0 12 18v-3l5 4-5 4v-3A8 8 0 1 1 12 4Z"></path>
-    <path d="M11 11h2v2h-2v-2Z"></path>
-  </svg>
+          <button class="overlay-button overlay-gyro-recalibrate-button" type="button" aria-label="視点リセット" hidden=""
+            disabled="">
+
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 4a8 8 0 0 1 7.45 5.05l-1.86.74A6 6 0 1 0 12 18v-3l5 4-5 4v-3A8 8 0 1 1 12 4Z"></path>
+              <path d="M11 11h2v2h-2v-2Z"></path>
+            </svg>
 
           </button>
         </div>
-      <canvas data-engine="three.js r160" width="1418" height="1336" style="display: block; touch-action: none;"></canvas></main>
-    </div></div>
-  
-  <script>
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js").catch((error) => {
-          console.error("Service Worker registration failed:", error);
-        });
-      });
-    }
-  </script>
-</body></html>
+        <canvas data-engine="three.js r160" width="1418" height="1336"
+          style="display: block; touch-action: none;"></canvas>
+      </main>
+    </div>
+  </div>
+
+  <script src="./script.js"></script>
+</body>
+
+</html>
