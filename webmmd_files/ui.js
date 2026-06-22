@@ -16,10 +16,13 @@ if ("serviceWorker" in navigator) {
   const ASSETS_CACHE_STORE_NAME = "assetsCache";
   const ASSETS_CACHE_RECORD_KEY = "assetsFiles";
   const HANDLE_RECORD_KEY = "assetsDirectoryHandle";
+  const ASSETS_SELECTED_MOTION_PATH_KEY = "webmmd.assets.selectedMotionPath";
 
   let cachedAssetsFiles = [];
   let indexedModelFiles = [];
   let indexedMotionFiles = [];
+  let selectedAssetsModelPath = "";
+  let selectedAssetsMotionPath = "";
   let sectionState = { usePathSections: false };
   let hasScannedAssets = false;
   let currentAssetsDirectoryHandle = null;
@@ -352,6 +355,96 @@ if ("serviceWorker" in navigator) {
     }
   };
 
+  const renderSingleChoiceMotionList = ({
+    listNode,
+    files,
+    emptyText,
+    selectedPath,
+    onSelect,
+  }) => {
+    listNode.replaceChildren();
+
+    if (files.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "motion-empty";
+      empty.textContent = emptyText;
+      listNode.append(empty);
+      return;
+    }
+
+    const selectedLower = toLower(selectedPath || "");
+    for (const file of files) {
+      const relativePath = getRelativePath(file);
+      const relativeLower = toLower(relativePath);
+
+      const row = document.createElement("label");
+      row.className = "motion-entry";
+
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "assets-motion-choice";
+      input.checked = relativeLower === selectedLower;
+      input.title = relativePath;
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        onSelect(relativePath);
+      });
+
+      const text = document.createElement("span");
+      text.className = "motion-name";
+      text.textContent = file.name;
+      text.title = relativePath;
+
+      row.append(input, text);
+      listNode.append(row);
+    }
+  };
+
+  const renderSingleChoiceModelList = ({
+    listNode,
+    files,
+    emptyText,
+    selectedPath,
+    onSelect,
+  }) => {
+    listNode.replaceChildren();
+
+    if (files.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "motion-empty";
+      empty.textContent = emptyText;
+      listNode.append(empty);
+      return;
+    }
+
+    const selectedLower = toLower(selectedPath || "");
+    for (const file of files) {
+      const relativePath = getRelativePath(file);
+      const relativeLower = toLower(relativePath);
+
+      const row = document.createElement("label");
+      row.className = "motion-entry";
+
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "assets-model-choice";
+      input.checked = relativeLower === selectedLower;
+      input.title = relativePath;
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        onSelect(relativePath);
+      });
+
+      const text = document.createElement("span");
+      text.className = "motion-name";
+      text.textContent = file.name;
+      text.title = relativePath;
+
+      row.append(input, text);
+      listNode.append(row);
+    }
+  };
+
   const indexAssetsFiles = (allFiles) => {
     const modelFiles = [];
     const motionFiles = [];
@@ -438,10 +531,54 @@ if ("serviceWorker" in navigator) {
     const savedPathLabel = localStorage.getItem(ASSETS_PATH_LABEL_KEY) || "";
     updateAssetsPathDisplay(savedPathLabel || "未設定");
 
+    const syncSelectedModelFromLoadedState = () => {
+      if (selectedAssetsModelPath || indexedModelFiles.length === 0) return false;
+
+      const loadedModelNameNode = document.querySelector(".loaded-model-name");
+      const loadedModelName = (loadedModelNameNode?.textContent || "").trim();
+      if (!loadedModelName) return false;
+
+      const loadedLower = toLower(loadedModelName);
+      const pathMatched = indexedModelFiles.find((file) => toLower(getRelativePath(file)) === loadedLower);
+      if (pathMatched) {
+        selectedAssetsModelPath = toLower(getRelativePath(pathMatched));
+        return true;
+      }
+
+      const nameMatched = indexedModelFiles.filter((file) => toLower(file.name) === loadedLower);
+      if (nameMatched.length !== 1) return false;
+
+      selectedAssetsModelPath = toLower(getRelativePath(nameMatched[0]));
+      return true;
+    };
+
     const renderIndexed = () => {
       const modelListNode = document.getElementById("assets-model-list");
       const motionListNode = document.getElementById("assets-motion-list");
       if (!modelListNode || !motionListNode) return;
+
+      if (!selectedAssetsMotionPath) {
+        const persistedMotionPath = localStorage.getItem(ASSETS_SELECTED_MOTION_PATH_KEY) || "";
+        if (persistedMotionPath) {
+          selectedAssetsMotionPath = toLower(persistedMotionPath);
+        }
+      }
+
+      if (
+        selectedAssetsModelPath &&
+        !indexedModelFiles.some((file) => toLower(getRelativePath(file)) === selectedAssetsModelPath)
+      ) {
+        selectedAssetsModelPath = "";
+      }
+
+      syncSelectedModelFromLoadedState();
+
+      if (
+        selectedAssetsMotionPath &&
+        !indexedMotionFiles.some((file) => toLower(getRelativePath(file)) === selectedAssetsMotionPath)
+      ) {
+        selectedAssetsMotionPath = "";
+      }
 
       const modelEmptyText = hasScannedAssets
         ? "model フォルダ内に PMX / ZIP がありません。"
@@ -450,19 +587,26 @@ if ("serviceWorker" in navigator) {
         ? "motion フォルダ内に VMD がありません。"
         : "assets フォルダを設定すると motion 一覧を表示します。";
 
-      renderResourceList({
+      renderSingleChoiceModelList({
         listNode: modelListNode,
         files: indexedModelFiles,
         emptyText: modelEmptyText,
-        buttonPrefix: "配置",
-        onClick: (path) => loadModelByPath(path),
+        selectedPath: selectedAssetsModelPath,
+        onSelect: (path) => {
+          selectedAssetsModelPath = toLower(path);
+          loadModelByPath(path);
+        },
       });
-      renderResourceList({
+      renderSingleChoiceMotionList({
         listNode: motionListNode,
         files: indexedMotionFiles,
         emptyText: motionEmptyText,
-        buttonPrefix: "適用",
-        onClick: (path) => loadMotionByPath(path),
+        selectedPath: selectedAssetsMotionPath,
+        onSelect: (path) => {
+          selectedAssetsMotionPath = toLower(path);
+          localStorage.setItem(ASSETS_SELECTED_MOTION_PATH_KEY, path);
+          loadMotionByPath(path);
+        },
       });
     };
 
@@ -488,6 +632,9 @@ if ("serviceWorker" in navigator) {
       cachedAssetsFiles = [];
       indexedModelFiles = [];
       indexedMotionFiles = [];
+      selectedAssetsModelPath = "";
+      selectedAssetsMotionPath = "";
+      localStorage.removeItem(ASSETS_SELECTED_MOTION_PATH_KEY);
       sectionState = { usePathSections: false };
       hasScannedAssets = false;
 
@@ -576,6 +723,21 @@ if ("serviceWorker" in navigator) {
       clearCacheButton.dataset.assetsClearHooked = "1";
       clearCacheButton.addEventListener("click", async () => {
         await resetAssetsState();
+      });
+    }
+
+    const loadedModelNameNode = document.querySelector(".loaded-model-name");
+    if (loadedModelNameNode instanceof HTMLElement && loadedModelNameNode.dataset.assetsSyncHooked !== "1") {
+      loadedModelNameNode.dataset.assetsSyncHooked = "1";
+      const loadedModelObserver = new MutationObserver(() => {
+        if (!selectedAssetsModelPath && syncSelectedModelFromLoadedState()) {
+          renderIndexed();
+        }
+      });
+      loadedModelObserver.observe(loadedModelNameNode, {
+        childList: true,
+        characterData: true,
+        subtree: true,
       });
     }
 

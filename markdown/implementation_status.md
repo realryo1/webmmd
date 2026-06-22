@@ -1,0 +1,15 @@
+# Implementation Status
+
+## 2026-06-23
+
+| Item | Status | Details |
+| --- | --- | --- |
+| motion list 上書き不具合の修正 | Completed | `#assets-motion-list` と再生用モーション一覧の衝突を解消。再生側は `#loaded-motion-list` を参照するように変更。 |
+| 自動復元時のモーション選択同期修正 | Completed | `webmmd_files/ui.js` で `webmmd.assets.selectedMotionPath` を保存/復元し、assets motion ラジオが自動でチェックされるよう修正。 |
+| 再生モーションUIの撤去 | Completed | `index.html` から `#loaded-motion-list-wrap` を削除。`webmmd_files/logic.js` で `renderMotionList` 呼び出しを停止し、再生モーション一覧描画を実質無効化。 |
+| 自動復元時のモデル選択同期修正 | Completed | `webmmd_files/ui.js` で `.loaded-model-name` から `selectedAssetsModelPath` を補完する同期処理を追加。自動復元後に assets model ラジオが自動でチェックされるよう修正。 |
+| assetsモデル選択UIの択一化 | Completed | `webmmd_files/ui.js` で「配置」ボタンを廃止。`assets-model-choice` の単一選択（radio）で選択時に即ロードする方式へ変更。 |
+| assetsモーション選択UIの択一化 | Completed | `webmmd_files/ui.js` で「適用」ボタンを廃止。`assets-motion-choice` の単一選択（radio）で選択時に即ロードする方式へ変更。 |
+| 反映ファイル | Completed | `index.html`, `webmmd_files/logic.js` |
+| 反映ファイル（追加） | Completed | `webmmd_files/ui.js` |
+| 最小検証 | Completed | 参照セレクタ切替確認、model/motion択一選択化確認、自動復元時のmodel/motionラジオ同期確認（実装上）、再生モーションUI撤去確認、静的エラー確認（対象3ファイルでエラーなし）。 |
