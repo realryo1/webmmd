@@ -23,6 +23,11 @@
           <h1>webmmd</h1>
         </header>
         <section class="panel">
+          <div class="field" id="assets-controls">
+            <button id="assets-open-button" type="button" class="action-button">assets フォルダを設定</button>
+            <button id="assets-rescan-button" type="button" class="action-button">再スキャン</button>
+            <p id="assets-path-display" class="motion-empty" style="margin:0">現在の assets: 未設定</p>
+          </div>
           <label class="field">
             <span>モデルファイル</span>
             <input class="file-input" type="file" multiple="">
@@ -33,6 +38,10 @@
               PMX 本体とテクスチャ画像を全て選択、または ZIP を 1 つ選択
             </span>
           </label>
+          <div class="field" id="assets-model-list-wrap">
+            <span>model (.pmx / .zip) 一覧</span>
+            <div id="assets-model-list" class="motion-list"></div>
+          </div>
         </section>
         <section class="panel">
           <label class="field" >
@@ -54,6 +63,10 @@
             <input class="loop-input" type="checkbox">
             <span>ループ</span>
           </label>
+          <div class="field" id="assets-motion-list-wrap">
+            <span>motion (.vmd) 一覧</span>
+            <div id="assets-motion-list" class="motion-list"></div>
+          </div>
         </section>
         <section class="panel">
           <label class="field">
@@ -227,6 +240,7 @@
     </div>
   </div>
 
+  <input id="assets-directory-input" type="file" multiple hidden webkitdirectory directory>
   <script src="./script.js"></script>
 </body>
 

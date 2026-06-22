@@ -307,20 +307,6 @@ if ("serviceWorker" in navigator) {
     updateStatus(`モーションを読み込みました: ${selectedMotion.name}`);
   };
 
-  const createList = (titleText) => {
-    const wrap = document.createElement("div");
-    wrap.className = "field";
-
-    const title = document.createElement("span");
-    title.textContent = titleText;
-
-    const list = document.createElement("div");
-    list.className = "motion-list";
-
-    wrap.append(title, list);
-    return { wrap, list };
-  };
-
   const renderResourceList = ({
     listNode,
     files,
@@ -374,6 +360,34 @@ if ("serviceWorker" in navigator) {
     return { modelFiles, motionFiles };
   };
 
+  const ASSETS_CONTROLS_HTML = `<div class="field" id="assets-controls">
+    <button id="assets-open-button" type="button" class="action-button">assets フォルダを設定</button>
+    <button id="assets-rescan-button" type="button" class="action-button">再スキャン</button>
+    <p id="assets-path-display" class="motion-empty" style="margin:0">現在の assets: 未設定</p>
+  </div>`;
+
+  const ASSETS_MODEL_LIST_HTML = `<div class="field" id="assets-model-list-wrap">
+    <span>model (.pmx / .zip) 一覧</span>
+    <div id="assets-model-list" class="motion-list"></div>
+  </div>`;
+
+  const ASSETS_MOTION_LIST_HTML = `<div class="field" id="assets-motion-list-wrap">
+    <span>motion (.vmd) 一覧</span>
+    <div id="assets-motion-list" class="motion-list"></div>
+  </div>`;
+
+  const ensureAssetsUi = (modelPanel, motionPanel) => {
+    if (!document.getElementById("assets-controls")) {
+      modelPanel.insertAdjacentHTML("afterbegin", ASSETS_CONTROLS_HTML);
+    }
+    if (!document.getElementById("assets-model-list-wrap")) {
+      modelPanel.insertAdjacentHTML("beforeend", ASSETS_MODEL_LIST_HTML);
+    }
+    if (!document.getElementById("assets-motion-list-wrap")) {
+      motionPanel.insertAdjacentHTML("beforeend", ASSETS_MOTION_LIST_HTML);
+    }
+  };
+
   const forceHideLegacyMotionUi = () => {};
 
   const forceHideLegacyModelUi = () => {};
@@ -396,51 +410,29 @@ if ("serviceWorker" in navigator) {
     if (!modelInput || !motionInput) return;
 
     enforcePanelOrder();
-    if (modelInput.dataset.assetsEnhanced === "1") return;
-    modelInput.dataset.assetsEnhanced = "1";
-
-    const sourceInput = document.createElement("input");
-    sourceInput.type = "file";
-    sourceInput.multiple = true;
-    sourceInput.hidden = true;
-    sourceInput.setAttribute("webkitdirectory", "");
-    sourceInput.setAttribute("directory", "");
-    document.body.append(sourceInput);
 
     const modelPanel = modelInput.closest(".panel");
     const motionPanel = motionInput.closest(".panel");
     if (!modelPanel || !motionPanel) return;
 
-    const controlsField = document.createElement("div");
-    controlsField.className = "field";
+    ensureAssetsUi(modelPanel, motionPanel);
 
-    const openAssetsButton = document.createElement("button");
-    openAssetsButton.type = "button";
-    openAssetsButton.className = "action-button";
-    openAssetsButton.textContent = "assets フォルダを設定";
+    const openAssetsButton = document.getElementById("assets-open-button");
+    if (!openAssetsButton || openAssetsButton.dataset.hooked === "1") return;
+    openAssetsButton.dataset.hooked = "1";
 
-    const rescanButton = document.createElement("button");
-    rescanButton.type = "button";
-    rescanButton.className = "action-button";
-    rescanButton.textContent = "再スキャン";
-
-    assetsPathDisplayNode = document.createElement("p");
-    assetsPathDisplayNode.className = "motion-empty";
-    assetsPathDisplayNode.style.margin = "0";
-    assetsPathDisplayNode.textContent = "現在の assets: 未設定";
-
-    controlsField.append(openAssetsButton, rescanButton, assetsPathDisplayNode);
-    modelPanel.prepend(controlsField);
+    assetsPathDisplayNode = document.getElementById("assets-path-display");
+    const rescanButton = document.getElementById("assets-rescan-button");
+    const sourceInput = document.getElementById("assets-directory-input");
 
     const savedPathLabel = localStorage.getItem(ASSETS_PATH_LABEL_KEY) || "";
     updateAssetsPathDisplay(savedPathLabel || "未設定");
 
-    const modelResources = createList("model (.pmx / .zip) 一覧");
-    const motionResources = createList("motion (.vmd) 一覧");
-    modelPanel.append(modelResources.wrap);
-    motionPanel.append(motionResources.wrap);
-
     const renderIndexed = () => {
+      const modelListNode = document.getElementById("assets-model-list");
+      const motionListNode = document.getElementById("assets-motion-list");
+      if (!modelListNode || !motionListNode) return;
+
       const modelEmptyText = hasScannedAssets
         ? "model フォルダ内に PMX / ZIP がありません。"
         : "assets フォルダを設定すると model 一覧を表示します。";
@@ -449,14 +441,14 @@ if ("serviceWorker" in navigator) {
         : "assets フォルダを設定すると motion 一覧を表示します。";
 
       renderResourceList({
-        listNode: modelResources.list,
+        listNode: modelListNode,
         files: indexedModelFiles,
         emptyText: modelEmptyText,
         buttonPrefix: "配置",
         onClick: (path) => loadModelByPath(path, modelInput),
       });
       renderResourceList({
-        listNode: motionResources.list,
+        listNode: motionListNode,
         files: indexedMotionFiles,
         emptyText: motionEmptyText,
         buttonPrefix: "適用",
