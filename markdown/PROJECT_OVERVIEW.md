@@ -12,20 +12,20 @@
 ```
 mmd/
 ├── index.html                    # メイン HTML（bundled app の土台）
-├── script.js                     # ★ カスタムロジック（本拡張のすべて）
 ├── sw.js                         # Service Worker（PWA）
 ├── manifest.webmanifest          # PWA マニフェスト
 ├── icons/
 │   └── icon-192.svg
-└── webmmd_files/                 # 元の webmmd バンドル（変更しない）
-    ├── index-4WVB8kZJ.js         # メインアプリバンドル（Three.js/MMD）
-    ├── index-BRZrvofv.css        # アプリスタイル
+└── webmmd_files/
+    ├── logic.js                  # メインアプリバンドル（Three.js/MMD 本体）
+    ├── ui.js                     # assets 管理拡張 UI
+    ├── style.css                 # アプリスタイル
     ├── ammo.js                   # Bullet 物理演算（Emscripten WebAssembly）
     ├── jszip.min-oqqPI3B3.js     # JSZip ライブラリ
     └── zip-loader-BVwbcZYR.js    # ZIP 展開モジュール
 ```
 
-> **重要:** `webmmd_files/` は一切変更しない。バンドル JS はページロード時に `#app` の innerHTML を書き換える。
+> **重要:** `webmmd_files/logic.js` はバンドル成果物のため、直接編集は高リスク。UI拡張は `webmmd_files/ui.js` 側で行う。
 
 ---
 
@@ -35,11 +35,14 @@ mmd/
 
 ```
 ページロード
-  └─ webmmd_files/script.js （バンドル）が #app を再構築
-        └─ MutationObserver が検知 → setupIfReady() を呼ぶ
-              └─ UI注入・イベント設定
-                    ├─ loadAssetsFilesFromCache()  → IndexedDB から blob 復元
-                    └─ loadDirectoryHandle()       → Directory Picker handle 復元 → scan()
+  ├─ webmmd_files/logic.js（module）を読み込み
+  │   └─ ビューア本体が #app を再構築
+  └─ webmmd_files/ui.js を読み込み
+    ├─ Service Worker を登録（./sw.js）
+    └─ MutationObserver が検知 → setupIfReady() を呼ぶ
+        └─ UI注入・イベント設定
+            ├─ loadAssetsFilesFromCache()  → IndexedDB から blob 復元
+            └─ loadDirectoryHandle()       → Directory Picker handle 復元 → scan()
 ```
 
 ### データ永続化レイヤー
@@ -54,7 +57,7 @@ DB 名: `webmmd-assets-db` / version: `2`
 
 ---
 
-## script.js 機能詳細
+## webmmd_files/ui.js 機能詳細
 
 ### 状態変数
 
@@ -157,6 +160,7 @@ assets/
 
 ## 注意事項
 
-- `webmmd_files/script.js` はページロード時に `#app` を書き換えるため、`setupIfReady()` は何度呼ばれても冪等になっている（`data-assetsEnhanced="1"` ガード）
+- `webmmd_files/logic.js` はページロード時に `#app` を書き換えるため、`setupIfReady()` は何度呼ばれても冪等になっている（`data-assetsEnhanced="1"` ガード）
 - `MutationObserver` で `#app` の変化を監視して `setupIfReady()` と `enforcePanelOrder()` を再適用している
-- Live Server 経由だと動作しないことがある（Service Worker のスコープ問題）。Tailscale や直接ファイルアクセスで確認すること
+- Service Worker は HTTPS または localhost でのみ有効。`file://` では登録できない
+- キャッシュ定義は `sw.js` の `webmmd-cache-v2` / `APP_SHELL` を参照（`logic.js` / `ui.js` / `style.css` を事前キャッシュ）
