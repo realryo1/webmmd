@@ -26,31 +26,31 @@
           <label class="field">
             <span>モデルファイル</span>
             <input class="file-input" type="file" multiple="">
-            <span class="loaded-model-name" hidden=""></span>
-            <span class="pending-load pending-model-load" hidden=""></span>
-            <span class="file-error file-error--model" hidden=""></span>
+            <span class="loaded-model-name" ></span>
+            <span class="pending-load pending-model-load" ></span>
+            <span class="file-error file-error--model" ></span>
             <span class="motion-empty">
               PMX 本体とテクスチャ画像を全て選択、または ZIP を 1 つ選択
             </span>
           </label>
         </section>
         <section class="panel">
-          <label class="field" hidden="">
+          <label class="field" >
             <span>モーション (.vmd)</span>
             <input class="motion-input" type="file" multiple="" disabled="">
-            <span class="pending-load pending-motion-load" hidden=""></span>
-            <span class="file-error file-error--motion" hidden=""></span>
+            <span class="pending-load pending-motion-load" ></span>
+            <span class="file-error file-error--motion" ></span>
           </label>
-          <div class="motion-list" hidden="">
+          <div class="motion-list" >
             <p class="motion-empty">VMD は未選択です。</p>
           </div>
-          <div class="playback-button-row" hidden="">
+          <div class="playback-button-row" >
             <button class="action-button play-pause-button" type="button" disabled="">再生</button>
             <button class="action-button reset-button" type="button" disabled="">
               リセット
             </button>
           </div>
-          <label class="checkbox-field" hidden="">
+          <label class="checkbox-field" >
             <input class="loop-input" type="checkbox">
             <span>ループ</span>
           </label>
@@ -59,13 +59,13 @@
           <label class="field">
             <span>カメラVMD</span>
             <input class="camera-motion-input" type="file" multiple="">
-            <span class="pending-load pending-camera-motion-load" hidden=""></span>
-            <span class="file-error file-error--camera" hidden=""></span>
+            <span class="pending-load pending-camera-motion-load" ></span>
+            <span class="file-error file-error--camera" ></span>
           </label>
           <div class="camera-motion-list"><label class="motion-entry"><input type="radio"
                 name="camera-motion"><span>なし</span></label></div>
         </section>
-        <section class="panel material-override-panel" hidden="">
+        <section class="panel material-override-panel" >
           <span class="debug-material-title">透明マテリアル制御</span>
           <div class="material-override-actions">
             <button class="action-button material-select-all-button" type="button" disabled="">
@@ -77,7 +77,7 @@
           </div>
           <ul class="material-override-list"></ul>
         </section>
-        <section class="panel camera-controls-panel" hidden="">
+        <section class="panel camera-controls-panel" >
           <label class="checkbox-field">
             <input class="gyro-input" type="checkbox">
             <span>ジャイロ操作</span>
@@ -104,7 +104,7 @@
           <button class="action-button gyro-recalibrate-button" type="button" disabled="">
             視点リセット
           </button>
-          <div class="field tracking-bone-field" hidden="">
+          <div class="field tracking-bone-field" >
             <label class="checkbox-field tracking-bone-toggle">
               <input class="tracking-enabled-input" type="checkbox" disabled="">
               <span>ボーン追跡</span>
@@ -170,7 +170,7 @@
               <input class="debug-mode-toggle" type="checkbox">
               <span>デバッグ表示</span>
             </label>
-            <label class="checkbox-field field--toggle gravity-vector-field" hidden="">
+            <label class="checkbox-field field--toggle gravity-vector-field" >
               <input class="gravity-vector-toggle" type="checkbox">
               <span>重力ベクトル表示</span>
             </label>
@@ -189,7 +189,7 @@
         </footer>
       </aside>
       <main class="viewer" aria-label="PMX preview">
-        <div class="viewer-loading" hidden="">
+        <div class="viewer-loading" >
           <div class="viewer-loading__spinner"></div>
           <span class="viewer-loading__text">読み込み中...</span>
         </div>
@@ -199,19 +199,19 @@
               <path d="M8 3H3v5h2V5h3V3Zm8 0v2h3v3h2V3h-5ZM5 16H3v5h5v-2H5v-3Zm14 3h-3v2h5v-5h-2v3Z"></path>
             </svg>
           </button>
-          <button class="overlay-button overlay-playback-toggle" type="button" aria-label="再生" hidden="" disabled="">
+          <button class="overlay-button overlay-playback-toggle" type="button" aria-label="再生"  disabled="">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M8 5v14l11-7L8 5Z"></path>
             </svg>
           </button>
-          <button class="overlay-button overlay-reset-button" type="button" aria-label="リセット" hidden="" disabled="">
+          <button class="overlay-button overlay-reset-button" type="button" aria-label="リセット"  disabled="">
 
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 5a7 7 0 1 1-6.32 4H3l4-4 4 4H8.05A5 5 0 1 0 12 7V5Z"></path>
             </svg>
 
           </button>
-          <button class="overlay-button overlay-gyro-recalibrate-button" type="button" aria-label="視点リセット" hidden=""
+          <button class="overlay-button overlay-gyro-recalibrate-button" type="button" aria-label="視点リセット" 
             disabled="">
 
             <svg viewBox="0 0 24 24" aria-hidden="true">
