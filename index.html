@@ -12,6 +12,18 @@
   <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml">
   <script src="./webmmd_files/ammo.js"></script>
   <script type="module" crossorigin="" src="./webmmd_files/logic.js"></script>
+    <script>
+      // Setup: wait for logic.js to define handlers
+      window.__appHandlers = null;
+      let handlerSetupAttempts = 0;
+      const handlerSetupInterval = setInterval(() => {
+        handlerSetupAttempts++;
+        if (handlerSetupAttempts > 50) {
+          clearInterval(handlerSetupInterval);
+          console.warn('[index.html] Handlers setup timeout');
+        }
+      }, 100);
+    </script>
   <link rel="stylesheet" crossorigin="" href="./webmmd_files/style.css">
 </head>
 
@@ -22,6 +34,18 @@
         <header class="brand">
           <h1>webmmd</h1>
         </header>
+        <div hidden>
+          <input class="file-input" type="file" multiple />
+          <span class="loaded-model-name"></span>
+          <span class="pending-load pending-model-load" hidden></span>
+          <span class="file-error file-error--model" hidden></span>
+          <input class="motion-input" type="file" multiple />
+          <span class="pending-load pending-motion-load" hidden></span>
+          <span class="file-error file-error--motion" hidden></span>
+          <input class="camera-motion-input" type="file" multiple />
+          <span class="pending-load pending-camera-motion-load" hidden></span>
+          <span class="file-error file-error--camera" hidden></span>
+        </div>
         <section class="panel">
           <div class="field" id="assets-controls">
             <h3>パス指定</h3>
@@ -180,6 +204,7 @@
         </footer>
       </aside>
       <main class="viewer" aria-label="PMX preview">
+        <canvas class="viewer-canvas"></canvas>
         <div class="viewer-loading">
           <div class="viewer-loading__spinner"></div>
           <span class="viewer-loading__text">読み込み中...</span>
