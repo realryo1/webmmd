@@ -28,31 +28,12 @@
             <button id="assets-rescan-button" type="button" class="action-button">再スキャン</button>
             <p id="assets-path-display" class="motion-empty" style="margin:0">現在の assets: 未設定</p>
           </div>
-          <label class="field">
-            <span>モデルファイル</span>
-            <input class="file-input" type="file" multiple="">
-            <span class="loaded-model-name" ></span>
-            <span class="pending-load pending-model-load" ></span>
-            <span class="file-error file-error--model" ></span>
-            <span class="motion-empty">
-              PMX 本体とテクスチャ画像を全て選択、または ZIP を 1 つ選択
-            </span>
-          </label>
           <div class="field" id="assets-model-list-wrap">
             <span>model (.pmx / .zip) 一覧</span>
             <div id="assets-model-list" class="motion-list"></div>
           </div>
         </section>
         <section class="panel">
-          <label class="field" >
-            <span>モーション (.vmd)</span>
-            <input class="motion-input" type="file" multiple="" disabled="">
-            <span class="pending-load pending-motion-load" ></span>
-            <span class="file-error file-error--motion" ></span>
-          </label>
-          <div class="motion-list" >
-            <p class="motion-empty">VMD は未選択です。</p>
-          </div>
           <div class="playback-button-row" >
             <button class="action-button play-pause-button" type="button" disabled="">再生</button>
             <button class="action-button reset-button" type="button" disabled="">
@@ -69,12 +50,6 @@
           </div>
         </section>
         <section class="panel">
-          <label class="field">
-            <span>カメラVMD</span>
-            <input class="camera-motion-input" type="file" multiple="">
-            <span class="pending-load pending-camera-motion-load" ></span>
-            <span class="file-error file-error--camera" ></span>
-          </label>
           <div class="camera-motion-list"><label class="motion-entry"><input type="radio"
                 name="camera-motion"><span>なし</span></label></div>
         </section>
@@ -190,7 +165,7 @@
             <p class="storage-usage">ストレージ使用量: 0 B / 10.0 GB (0.0%)</p>
           </div>
         </section>
-        <p class="status" aria-live="polite">PMX 本体とテクスチャ画像を全て選択、または ZIP を 1 つ選択してください。</p>
+        <p class="status" aria-live="polite">assets フォルダを設定すると model / motion を検知して一覧表示します。</p>
         <footer class="sidebar-footer">
           <p class="sidebar-footer__notice">
             読み込んだ各ファイルは一切アップロードされません。ブラウザのローカルストレージに保存され、ユーザ自身は再利用可能です。「キャッシュをクリア」ボタンによりローカルストレージの内容を削除できます。

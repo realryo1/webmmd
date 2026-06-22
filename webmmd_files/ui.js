@@ -9,8 +9,6 @@ if ("serviceWorker" in navigator) {
 (() => {
   const STATUS_DEFAULT = "assets フォルダを設定すると model / motion を検知して一覧表示します。";
   const STATUS_MISSING = "assets/model または assets/motion が見つかりません。";
-  const LEGACY_MODEL_HELP = "PMX 本体とテクスチャ画像を全て選択、または ZIP を 1 つ選択";
-  const LEGACY_STATUS = "PMX 本体とテクスチャ画像を全て選択、または ZIP を 1 つ選択してください。";
   const ASSETS_PATH_LABEL_KEY = "webmmd.assets.pathLabel";
   const HANDLE_DB_NAME = "webmmd-assets-db";
   const HANDLE_DB_VERSION = 2;
@@ -270,7 +268,13 @@ if ("serviceWorker" in navigator) {
     };
   };
 
-  const loadModelByPath = (path, modelInput) => {
+  const loadModelByPath = (path) => {
+    const modelInput = document.querySelector(".file-input");
+    if (!modelInput) {
+      updateStatus("モデル入力が初期化されていません。ページを再読み込みしてください。");
+      return;
+    }
+
     const selectedLower = toLower(path);
     const selectedModel = indexedModelFiles.find((file) => toLower(getRelativePath(file)) === selectedLower);
     if (!selectedModel) {
@@ -295,7 +299,13 @@ if ("serviceWorker" in navigator) {
     updateStatus(`モデルを読み込みました: ${selectedModel.name}`);
   };
 
-  const loadMotionByPath = (path, motionInput) => {
+  const loadMotionByPath = (path) => {
+    const motionInput = document.querySelector(".motion-input");
+    if (!motionInput) {
+      updateStatus("モーション入力が初期化されていません。ページを再読み込みしてください。");
+      return;
+    }
+
     const selectedLower = toLower(path);
     const selectedMotion = indexedMotionFiles.find((file) => toLower(getRelativePath(file)) === selectedLower);
     if (!selectedMotion) {
@@ -388,16 +398,12 @@ if ("serviceWorker" in navigator) {
     }
   };
 
-  const forceHideLegacyMotionUi = () => {};
-
-  const forceHideLegacyModelUi = () => {};
-
   const enforcePanelOrder = () => {
-    const cameraInput = document.querySelector(".camera-motion-input");
+    const cameraMotionList = document.querySelector(".camera-motion-list");
     const materialPanel = document.querySelector(".material-override-panel");
-    if (!cameraInput || !materialPanel) return;
+    if (!cameraMotionList || !materialPanel) return;
 
-    const cameraPanel = cameraInput.closest(".panel");
+    const cameraPanel = cameraMotionList.closest(".panel");
     if (!cameraPanel) return;
     if (cameraPanel.nextElementSibling === materialPanel) return;
 
@@ -405,14 +411,18 @@ if ("serviceWorker" in navigator) {
   };
 
   const setupIfReady = () => {
-    const modelInput = document.querySelector(".file-input");
-    const motionInput = document.querySelector(".motion-input");
-    if (!modelInput || !motionInput) return;
-
     enforcePanelOrder();
 
-    const modelPanel = modelInput.closest(".panel");
-    const motionPanel = motionInput.closest(".panel");
+    const allPanels = Array.from(document.querySelectorAll(".sidebar .panel"));
+    const motionPanel = allPanels.find((panel) => panel.querySelector(".play-pause-button")) || null;
+    const modelPanel = allPanels.find((panel) => {
+      if (!(panel instanceof HTMLElement)) return false;
+      if (panel === motionPanel) return false;
+      if (panel.classList.contains("material-override-panel")) return false;
+      if (panel.classList.contains("camera-controls-panel")) return false;
+      if (panel.querySelector(".camera-motion-list")) return false;
+      return true;
+    }) || null;
     if (!modelPanel || !motionPanel) return;
 
     ensureAssetsUi(modelPanel, motionPanel);
@@ -445,14 +455,14 @@ if ("serviceWorker" in navigator) {
         files: indexedModelFiles,
         emptyText: modelEmptyText,
         buttonPrefix: "配置",
-        onClick: (path) => loadModelByPath(path, modelInput),
+        onClick: (path) => loadModelByPath(path),
       });
       renderResourceList({
         listNode: motionListNode,
         files: indexedMotionFiles,
         emptyText: motionEmptyText,
         buttonPrefix: "適用",
-        onClick: (path) => loadMotionByPath(path, motionInput),
+        onClick: (path) => loadMotionByPath(path),
       });
     };
 

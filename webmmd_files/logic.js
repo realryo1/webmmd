@@ -3774,16 +3774,12 @@ void RE_IndirectDiffuse_BlinnPhong( const in vec3 irradiance, const in vec3 geom
           <h1>Handystage</h1>
         </header>
         <section class="panel">
-          <label class="field">
-            <span>&#12514;&#12487;&#12523;&#12501;&#12449;&#12452;&#12523;</span>
-            <input class="file-input" type="file" multiple />
-            <span class="loaded-model-name"></span>
-            <span class="pending-load pending-model-load" hidden></span>
-            <span class="file-error file-error--model" hidden></span>
-            <span class="motion-empty">
-              PMX &#26412;&#20307;&#12392;&#12486;&#12463;&#12473;&#12481;&#12515;&#30011;&#20687;&#12434;&#20840;&#12390;&#36984;&#25246;&#12289;&#12414;&#12383;&#12399; ZIP &#12434; 1 &#12388;&#36984;&#25246;
-            </span>
-          </label>
+          <div class="legacy-upload-hidden" hidden>
+  <input class="file-input" type="file" multiple />
+  <span class="loaded-model-name"></span>
+  <span class="pending-load pending-model-load" hidden></span>
+  <span class="file-error file-error--model" hidden></span>
+</div>
         </section>
         <section class="panel material-override-panel">
           <span class="debug-material-title">&#36879;&#26126;&#12510;&#12486;&#12522;&#12450;&#12523;&#21046;&#24481;</span>
@@ -3798,12 +3794,11 @@ void RE_IndirectDiffuse_BlinnPhong( const in vec3 irradiance, const in vec3 geom
           <ul class="material-override-list"></ul>
         </section>
         <section class="panel">
-          <label class="field">
-            <span>&#12514;&#12540;&#12471;&#12519;&#12531; (.vmd)</span>
-            <input class="motion-input" type="file" multiple />
-            <span class="pending-load pending-motion-load" hidden></span>
-            <span class="file-error file-error--motion" hidden></span>
-          </label>
+          <div class="legacy-upload-hidden" hidden>
+  <input class="motion-input" type="file" multiple />
+  <span class="pending-load pending-motion-load" hidden></span>
+  <span class="file-error file-error--motion" hidden></span>
+</div>
           <div class="motion-list"></div>
           <div class="playback-button-row">
             <button class="action-button play-pause-button" type="button">
@@ -3819,12 +3814,11 @@ void RE_IndirectDiffuse_BlinnPhong( const in vec3 irradiance, const in vec3 geom
           </label>
         </section>
         <section class="panel">
-          <label class="field">
-            <span>&#12459;&#12513;&#12521; VMD</span>
-            <input class="camera-motion-input" type="file" multiple />
-            <span class="pending-load pending-camera-motion-load" hidden></span>
-            <span class="file-error file-error--camera" hidden></span>
-          </label>
+          <div class="legacy-upload-hidden" hidden>
+  <input class="camera-motion-input" type="file" multiple />
+  <span class="pending-load pending-camera-motion-load" hidden></span>
+  <span class="file-error file-error--camera" hidden></span>
+</div>
           <div class="camera-motion-list"></div>
         </section>
         <section class="panel camera-controls-panel">
