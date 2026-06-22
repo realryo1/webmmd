@@ -24,36 +24,39 @@
         </header>
         <section class="panel">
           <div class="field" id="assets-controls">
+            <h3>パス指定</h3>
+            <p id="assets-path-display" class="motion-empty" style="margin:0">現在のアセットパス：未設定</p>
             <button id="assets-open-button" type="button" class="action-button">assets フォルダを設定</button>
             <button id="assets-rescan-button" type="button" class="action-button">再スキャン</button>
-            <p id="assets-path-display" class="motion-empty" style="margin:0">現在の assets: 未設定</p>
           </div>
+        </section>
+        <section class="panel">
           <div class="field" id="assets-model-list-wrap">
-            <span>model (.pmx / .zip) 一覧</span>
+            <h3>モデル (.pmx / .zip) </h3>
             <div id="assets-model-list" class="motion-list"></div>
           </div>
         </section>
         <section class="panel">
-          <div class="playback-button-row" >
+          <div class="field" id="assets-motion-list-wrap">
+            <h3>モーション (.vmd) </h3>
+            <div id="assets-motion-list" class="motion-list"></div>
+          </div>
+          <div class="playback-button-row">
             <button class="action-button play-pause-button" type="button" disabled="">再生</button>
             <button class="action-button reset-button" type="button" disabled="">
               リセット
             </button>
           </div>
-          <label class="checkbox-field" >
+          <label class="checkbox-field">
             <input class="loop-input" type="checkbox">
             <span>ループ</span>
           </label>
-          <div class="field" id="assets-motion-list-wrap">
-            <span>motion (.vmd) 一覧</span>
-            <div id="assets-motion-list" class="motion-list"></div>
-          </div>
         </section>
         <section class="panel">
           <div class="camera-motion-list"><label class="motion-entry"><input type="radio"
                 name="camera-motion"><span>なし</span></label></div>
         </section>
-        <section class="panel material-override-panel" >
+        <section class="panel material-override-panel">
           <span class="debug-material-title">透明マテリアル制御</span>
           <div class="material-override-actions">
             <button class="action-button material-select-all-button" type="button" disabled="">
@@ -65,7 +68,7 @@
           </div>
           <ul class="material-override-list"></ul>
         </section>
-        <section class="panel camera-controls-panel" >
+        <section class="panel camera-controls-panel">
           <label class="checkbox-field">
             <input class="gyro-input" type="checkbox">
             <span>ジャイロ操作</span>
@@ -92,7 +95,7 @@
           <button class="action-button gyro-recalibrate-button" type="button" disabled="">
             視点リセット
           </button>
-          <div class="field tracking-bone-field" >
+          <div class="field tracking-bone-field">
             <label class="checkbox-field tracking-bone-toggle">
               <input class="tracking-enabled-input" type="checkbox" disabled="">
               <span>ボーン追跡</span>
@@ -158,7 +161,7 @@
               <input class="debug-mode-toggle" type="checkbox">
               <span>デバッグ表示</span>
             </label>
-            <label class="checkbox-field field--toggle gravity-vector-field" >
+            <label class="checkbox-field field--toggle gravity-vector-field">
               <input class="gravity-vector-toggle" type="checkbox">
               <span>重力ベクトル表示</span>
             </label>
@@ -177,7 +180,7 @@
         </footer>
       </aside>
       <main class="viewer" aria-label="PMX preview">
-        <div class="viewer-loading" >
+        <div class="viewer-loading">
           <div class="viewer-loading__spinner"></div>
           <span class="viewer-loading__text">読み込み中...</span>
         </div>
@@ -187,20 +190,19 @@
               <path d="M8 3H3v5h2V5h3V3Zm8 0v2h3v3h2V3h-5ZM5 16H3v5h5v-2H5v-3Zm14 3h-3v2h5v-5h-2v3Z"></path>
             </svg>
           </button>
-          <button class="overlay-button overlay-playback-toggle" type="button" aria-label="再生"  disabled="">
+          <button class="overlay-button overlay-playback-toggle" type="button" aria-label="再生" disabled="">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M8 5v14l11-7L8 5Z"></path>
             </svg>
           </button>
-          <button class="overlay-button overlay-reset-button" type="button" aria-label="リセット"  disabled="">
+          <button class="overlay-button overlay-reset-button" type="button" aria-label="リセット" disabled="">
 
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 5a7 7 0 1 1-6.32 4H3l4-4 4 4H8.05A5 5 0 1 0 12 7V5Z"></path>
             </svg>
 
           </button>
-          <button class="overlay-button overlay-gyro-recalibrate-button" type="button" aria-label="視点リセット" 
-            disabled="">
+          <button class="overlay-button overlay-gyro-recalibrate-button" type="button" aria-label="視点リセット" disabled="">
 
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 4a8 8 0 0 1 7.45 5.05l-1.86.74A6 6 0 1 0 12 18v-3l5 4-5 4v-3A8 8 0 1 1 12 4Z"></path>
