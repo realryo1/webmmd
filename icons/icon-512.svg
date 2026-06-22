@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="webmmd icon">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <circle cx="256" cy="256" r="154" fill="#22d3ee" opacity="0.15"/>
+  <path d="M128 341.333V170.667h53.333L256 290.667l74.667-120h53.333v170.666h-48V248l-64 101.333h-32L176 248v93.333h-48z" fill="#e2e8f0"/>
+</svg>
