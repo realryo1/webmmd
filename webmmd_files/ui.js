@@ -249,13 +249,6 @@ if ("serviceWorker" in navigator) {
   };
 
   const setFileInputAndDispatch = (input, files) => {
-      // Try to use handlers directly if available (avoids blob URL issues)
-      if (window.__appHandlers?.onFilesSelected) {
-        console.debug('[ui] Using handlers directly for file selection');
-        window.__appHandlers.onFilesSelected(files);
-        return;
-      }
-      // Fallback to DataTransfer if handlers not available
     const transfer = new DataTransfer();
     for (const file of files) {
       transfer.items.add(file);
@@ -322,14 +315,7 @@ if ("serviceWorker" in navigator) {
 
     setFileInputAndDispatch(motionInput, [selectedMotion]);
     updateStatus(`モーションを読み込みました: ${selectedMotion.name}`);
-        const filesToDispatch = [selectedModel];
-        // Ensure file has correct webkitRelativePath
-        Object.defineProperty(selectedModel, 'webkitRelativePath', {
-          value: getRelativePath(selectedModel),
-          writable: false,
-          configurable: true
-        });
-        setFileInputAndDispatch(modelInput, filesToDispatch);
+  };
 
   const renderResourceList = ({
     listNode,
@@ -339,21 +325,6 @@ if ("serviceWorker" in navigator) {
     onClick,
   }) => {
     listNode.replaceChildren();
-     // Ensure all files have correct webkitRelativePath
-     for (const file of selectedFiles) {
-       Object.defineProperty(file, 'webkitRelativePath', {
-         value: getRelativePath(file),
-         writable: false,
-         configurable: true
-       });
-     }
-     for (const file of modelFiles) {
-       Object.defineProperty(file, 'webkitRelativePath', {
-         value: getRelativePath(file),
-         writable: false,
-         configurable: true
-       });
-     }
 
     if (files.length === 0) {
       const empty = document.createElement("p");
@@ -644,13 +615,4 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("DOMContentLoaded", () => {
     setupIfReady();
   });
-
-    // Export handlers to window so logic.js can access them
-    window.__uiState = window.__uiState || {};
-    const waitForHandlers = setInterval(() => {
-      if (window.__appHandlers) {
-        clearInterval(waitForHandlers);
-        console.debug('[ui] Handlers registered from logic.js');
-      }
-    }, 100);
   })();

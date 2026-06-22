@@ -12,18 +12,6 @@
   <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml">
   <script src="./webmmd_files/ammo.js"></script>
   <script type="module" crossorigin="" src="./webmmd_files/logic.js"></script>
-    <script>
-      // Setup: wait for logic.js to define handlers
-      window.__appHandlers = null;
-      let handlerSetupAttempts = 0;
-      const handlerSetupInterval = setInterval(() => {
-        handlerSetupAttempts++;
-        if (handlerSetupAttempts > 50) {
-          clearInterval(handlerSetupInterval);
-          console.warn('[index.html] Handlers setup timeout');
-        }
-      }, 100);
-    </script>
   <link rel="stylesheet" crossorigin="" href="./webmmd_files/style.css">
 </head>
 
@@ -204,7 +192,6 @@
         </footer>
       </aside>
       <main class="viewer" aria-label="PMX preview">
-        <canvas class="viewer-canvas"></canvas>
         <div class="viewer-loading">
           <div class="viewer-loading__spinner"></div>
           <span class="viewer-loading__text">読み込み中...</span>
