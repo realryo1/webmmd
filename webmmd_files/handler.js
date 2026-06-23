@@ -75,6 +75,7 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
     materialClearAllButton;
     materialOverrideList;
     clearCacheButton;
+    shadowInput;
     viewerOverlay;
     fullscreenToggleButton;
     overlayPlaybackButton;
@@ -88,7 +89,7 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
     lastRenderedTrackingBoneSelectKey = null;
     lastRenderedMaterialOverrideListKey = null;
     constructor(e, t) {
-        this.handlers = t, this.root = e.querySelector(`.app-shell`) || document.querySelector(`.app-shell`), this.fileInput = document.querySelector(`.file-input`), this.loadedModelName = document.querySelector(`.loaded-model-name`), this.pendingModelLoadName = document.querySelector(`.pending-model-load`), this.modelFileError = document.querySelector(`.file-error--model`), this.motionInput = document.querySelector(`.motion-input`), this.pendingMotionLoadNames = document.querySelector(`.pending-motion-load`), this.motionFileError = document.querySelector(`.file-error--motion`), this.cameraMotionInput = document.querySelector(`.camera-motion-input`), this.pendingCameraMotionLoadNames = document.querySelector(`.pending-camera-motion-load`), this.cameraMotionFileError = document.querySelector(`.file-error--camera`), this.cameraControlsPanel = document.querySelector(`.camera-controls-panel`), this.gyroInput = document.querySelector(`.gyro-input`), this.gyroModeInputs = Array.from(document.querySelectorAll(`.gyro-mode-input`)), this.gyroViewpointSensitivityInput = document.querySelector(`.gyro-sensitivity-input--viewpoint`), this.gyroModelCenterSensitivityInput = document.querySelector(`.gyro-sensitivity-input--model-center`), this.gyroRecalibrateButton = document.querySelector(`.gyro-recalibrate-button`), this.trackingBoneField = document.querySelector(`.tracking-bone-field`), this.trackingEnabledInput = document.querySelector(`.tracking-enabled-input`), this.trackingBoneSelect = document.querySelector(`.tracking-bone-select`), this.playPauseButton = document.querySelector(`.play-pause-button`), this.resetButton = document.querySelector(`.reset-button`), this.poseResetButton = document.querySelector(`.pose-reset-button`), this.loopInput = document.querySelector(`.loop-input`), this.motionList = document.createElement(`div`), this.cameraMotionList = document.querySelector(`.camera-motion-list`), this.colorInput = document.querySelector(`.color-input`), this.backgroundModeSelect = document.querySelector(`.mode-select`), this.autoRestoreInput = document.querySelector(`.auto-restore-input`), this.screenAwakeInput = document.querySelector(`.screen-awake-toggle`), this.debugModeInput = document.querySelector(`.debug-mode-toggle`), this.physicsSensorInput = document.querySelector(`.physics-sensor-toggle`), this.gravityMagnitudeInput = document.querySelector(`.gravity-magnitude-input`), this.gravityMagnitudeValue = document.querySelector(`.gravity-magnitude-value`), this.physicsSensorImpulseSensitivityInput = document.querySelector(`.physics-sensor-impulse-sensitivity-input`), this.physicsSensorRecalibrateButton = document.querySelector(`.physics-sensor-recalibrate-button`), this.gravityVectorField = document.querySelector(`.gravity-vector-field`), this.gravityVectorInput = document.querySelector(`.gravity-vector-toggle`), this.storageUsageElement = document.querySelector(`.storage-usage`), this.rotationCenterMarkerInput = document.querySelector(`.rotation-center-marker-toggle`), this.materialOverridePanel = document.querySelector(`.material-override-panel`), this.materialSelectAllButton = document.querySelector(`.material-select-all-button`), this.materialClearAllButton = document.querySelector(`.material-clear-all-button`), this.materialOverrideList = document.querySelector(`.material-override-list`), this.clearCacheButton = document.querySelector(`.clear-cache-button`), this.viewerOverlay = document.querySelector(`.viewer-overlay`), this.fullscreenToggleButton = document.querySelector(`.fullscreen-toggle`), this.overlayPlaybackButton = document.querySelector(`.overlay-playback-toggle`), this.overlayResetButton = document.querySelector(`.overlay-reset-button`), this.overlayGyroRecalibrateButton = document.querySelector(`.overlay-gyro-recalibrate-button`), this.statusText = document.querySelector(`.status`), this.viewerContainer = document.querySelector(`.viewer`), this.viewerLoading = document.querySelector(`.viewer-loading`), this.viewerCanvas = this.viewerContainer ?.querySelector(`.viewer-canvas`), this.fileInput ?.addEventListener(`change`, () => {
+        this.handlers = t, this.root = e.querySelector(`.app-shell`) || document.querySelector(`.app-shell`), this.fileInput = document.querySelector(`.file-input`), this.loadedModelName = document.querySelector(`.loaded-model-name`), this.pendingModelLoadName = document.querySelector(`.pending-model-load`), this.modelFileError = document.querySelector(`.file-error--model`), this.motionInput = document.querySelector(`.motion-input`), this.pendingMotionLoadNames = document.querySelector(`.pending-motion-load`), this.motionFileError = document.querySelector(`.file-error--motion`), this.cameraMotionInput = document.querySelector(`.camera-motion-input`), this.pendingCameraMotionLoadNames = document.querySelector(`.pending-camera-motion-load`), this.cameraMotionFileError = document.querySelector(`.file-error--camera`), this.cameraControlsPanel = document.querySelector(`.camera-controls-panel`), this.gyroInput = document.querySelector(`.gyro-input`), this.gyroModeInputs = Array.from(document.querySelectorAll(`.gyro-mode-input`)), this.gyroViewpointSensitivityInput = document.querySelector(`.gyro-sensitivity-input--viewpoint`), this.gyroModelCenterSensitivityInput = document.querySelector(`.gyro-sensitivity-input--model-center`), this.gyroRecalibrateButton = document.querySelector(`.gyro-recalibrate-button`), this.trackingBoneField = document.querySelector(`.tracking-bone-field`), this.trackingEnabledInput = document.querySelector(`.tracking-enabled-input`), this.trackingBoneSelect = document.querySelector(`.tracking-bone-select`), this.playPauseButton = document.querySelector(`.play-pause-button`), this.resetButton = document.querySelector(`.reset-button`), this.poseResetButton = document.querySelector(`.pose-reset-button`), this.loopInput = document.querySelector(`.loop-input`), this.motionList = document.createElement(`div`), this.cameraMotionList = document.querySelector(`.camera-motion-list`), this.colorInput = document.querySelector(`.color-input`), this.backgroundModeSelect = document.querySelector(`.mode-select`), this.autoRestoreInput = document.querySelector(`.auto-restore-input`), this.screenAwakeInput = document.querySelector(`.screen-awake-toggle`), this.debugModeInput = document.querySelector(`.debug-mode-toggle`), this.physicsSensorInput = document.querySelector(`.physics-sensor-toggle`), this.gravityMagnitudeInput = document.querySelector(`.gravity-magnitude-input`), this.gravityMagnitudeValue = document.querySelector(`.gravity-magnitude-value`), this.physicsSensorImpulseSensitivityInput = document.querySelector(`.physics-sensor-impulse-sensitivity-input`), this.physicsSensorRecalibrateButton = document.querySelector(`.physics-sensor-recalibrate-button`), this.gravityVectorField = document.querySelector(`.gravity-vector-field`), this.gravityVectorInput = document.querySelector(`.gravity-vector-toggle`), this.storageUsageElement = document.querySelector(`.storage-usage`), this.rotationCenterMarkerInput = document.querySelector(`.rotation-center-marker-toggle`), this.materialOverridePanel = document.querySelector(`.material-override-panel`), this.materialSelectAllButton = document.querySelector(`.material-select-all-button`), this.materialClearAllButton = document.querySelector(`.material-clear-all-button`), this.materialOverrideList = document.querySelector(`.material-override-list`), this.clearCacheButton = document.querySelector(`.clear-cache-button`), this.shadowInput = document.querySelector(`.shadow-toggle`), this.viewerOverlay = document.querySelector(`.viewer-overlay`), this.fullscreenToggleButton = document.querySelector(`.fullscreen-toggle`), this.overlayPlaybackButton = document.querySelector(`.overlay-playback-toggle`), this.overlayResetButton = document.querySelector(`.overlay-reset-button`), this.overlayGyroRecalibrateButton = document.querySelector(`.overlay-gyro-recalibrate-button`), this.statusText = document.querySelector(`.status`), this.viewerContainer = document.querySelector(`.viewer`), this.viewerLoading = document.querySelector(`.viewer-loading`), this.viewerCanvas = this.viewerContainer ?.querySelector(`.viewer-canvas`), this.fileInput ?.addEventListener(`change`, () => {
             this.fileInput.files !== null && this.fileInput.files.length > 0 && this.handlers.onFilesSelected(this.fileInput.files)
         }), this.motionInput ?.addEventListener(`change`, () => {
             if (this.motionInput.files !== null) {
@@ -134,6 +135,8 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
             this.handlers.onScreenAwakeEnabledChanged(this.screenAwakeInput.checked)
         }), this.debugModeInput ?.addEventListener(`change`, () => {
             this.handlers.onDebugModeChanged(this.debugModeInput.checked)
+        }), this.shadowInput ?.addEventListener(`change`, () => {
+            this.handlers.onShadowEnabledChanged(this.shadowInput.checked)
         }), this.physicsSensorInput ?.addEventListener(`change`, () => {
             this.handlers.onPhysicsSensorEnabledChanged(this.physicsSensorInput.checked)
         }), this.gravityMagnitudeInput ?.addEventListener(`input`, () => {
@@ -167,7 +170,7 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
         this.storageUsageElement.textContent = e
     } render(e) {
         let t = e.isLoading || e.isMotionLoading || e.isCameraMotionLoading;
-        sf(this.colorInput, e.settings.backgroundColor), this.loadedModelName.textContent = e.loadedModel ?.fileName ?? ``, this.loadedModelName.hidden = e.loadedModel === null, lf(this.pendingModelLoadName, e.pendingModelLoadName), uf(this.pendingMotionLoadNames, e.pendingMotionLoadNames), uf(this.pendingCameraMotionLoadNames, e.pendingCameraMotionLoadNames), cf(this.modelFileError, e.modelLoadError), cf(this.motionFileError, e.motionLoadError), cf(this.cameraMotionFileError, e.cameraMotionLoadError), this.backgroundModeSelect.value = e.settings.backgroundMode, this.autoRestoreInput.checked = e.settings.isAutoRestoreEnabled, this.screenAwakeInput.checked = e.settings.isScreenAwakeEnabled, this.debugModeInput.checked = e.settings.isDebugModeEnabled, this.physicsSensorInput.checked = e.settings.isPhysicsSensorEnabled, sf(this.gravityMagnitudeInput, String(e.settings.gravityMagnitude)), this.gravityMagnitudeValue.textContent = e.settings.gravityMagnitude.toFixed(1), sf(this.physicsSensorImpulseSensitivityInput, String(e.settings.physicsSensorImpulseSensitivity)), this.physicsSensorImpulseSensitivityInput.disabled = !e.settings.isPhysicsSensorEnabled, this.physicsSensorRecalibrateButton.disabled = !e.settings.isPhysicsSensorEnabled, this.gravityVectorField.hidden = !e.settings.isDebugModeEnabled, this.gravityVectorInput.checked = e.settings.isGravityVectorVisible, this.rotationCenterMarkerInput.checked = e.settings.isRotationCenterMarkerVisible, this.renderMaterialOverrideList(e), this.viewerOverlay.classList.toggle(`viewer-overlay--fullscreen`, e.isFullscreen), this.fullscreenToggleButton.innerHTML = e.isFullscreen ? $d: Qd, this.fullscreenToggleButton.setAttribute(`aria-label`, e.isFullscreen ? Yd: Jd), this.overlayPlaybackButton.innerHTML = e.isPlaying ? tf: ef, this.overlayPlaybackButton.setAttribute(`aria-label`, e.isPlaying ? Ud: Hd), this.fileInput.disabled = e.isLoading, this.motionInput.disabled = e.isLoading || e.loadedModel === null, this.cameraMotionInput.disabled = e.isLoading || e.isCameraMotionLoading, this.cameraControlsPanel.hidden = e.loadedModel === null, this.gyroInput.checked = e.isGyroEnabled;
+        sf(this.colorInput, e.settings.backgroundColor), this.loadedModelName.textContent = e.loadedModel ?.fileName ?? ``, this.loadedModelName.hidden = e.loadedModel === null, lf(this.pendingModelLoadName, e.pendingModelLoadName), uf(this.pendingMotionLoadNames, e.pendingMotionLoadNames), uf(this.pendingCameraMotionLoadNames, e.pendingCameraMotionLoadNames), cf(this.modelFileError, e.modelLoadError), cf(this.motionFileError, e.motionLoadError), cf(this.cameraMotionFileError, e.cameraMotionLoadError), this.backgroundModeSelect.value = e.settings.backgroundMode, this.autoRestoreInput.checked = e.settings.isAutoRestoreEnabled, this.screenAwakeInput.checked = e.settings.isScreenAwakeEnabled, this.debugModeInput.checked = e.settings.isDebugModeEnabled, this.shadowInput && (this.shadowInput.checked = e.settings.isShadowEnabled === true), this.physicsSensorInput.checked = e.settings.isPhysicsSensorEnabled, sf(this.gravityMagnitudeInput, String(e.settings.gravityMagnitude)), this.gravityMagnitudeValue.textContent = e.settings.gravityMagnitude.toFixed(1), sf(this.physicsSensorImpulseSensitivityInput, String(e.settings.physicsSensorImpulseSensitivity)), this.physicsSensorImpulseSensitivityInput.disabled = !e.settings.isPhysicsSensorEnabled, this.physicsSensorRecalibrateButton.disabled = !e.settings.isPhysicsSensorEnabled, this.gravityVectorField.hidden = !e.settings.isDebugModeEnabled, this.gravityVectorInput.checked = e.settings.isGravityVectorVisible, this.rotationCenterMarkerInput.checked = e.settings.isRotationCenterMarkerVisible, this.renderMaterialOverrideList(e), this.viewerOverlay.classList.toggle(`viewer-overlay--fullscreen`, e.isFullscreen), this.fullscreenToggleButton.innerHTML = e.isFullscreen ? $d: Qd, this.fullscreenToggleButton.setAttribute(`aria-label`, e.isFullscreen ? Yd: Jd), this.overlayPlaybackButton.innerHTML = e.isPlaying ? tf: ef, this.overlayPlaybackButton.setAttribute(`aria-label`, e.isPlaying ? Ud: Hd), this.fileInput.disabled = e.isLoading, this.motionInput.disabled = e.isLoading || e.loadedModel === null, this.cameraMotionInput.disabled = e.isLoading || e.isCameraMotionLoading, this.cameraControlsPanel.hidden = e.loadedModel === null, this.gyroInput.checked = e.isGyroEnabled;
         let n = e.settings.gyroMode;
         for (let t of this.gyroModeInputs) t.checked = t.value === n, t.disabled = !e.isGyroEnabled;
         sf(this.gyroViewpointSensitivityInput, String(e.settings.gyroViewpointSensitivity)), sf(this.gyroModelCenterSensitivityInput, String(e.settings.gyroModelCenterSensitivity)), this.gyroViewpointSensitivityInput.disabled = !e.isGyroEnabled, this.gyroModelCenterSensitivityInput.disabled = !e.isGyroEnabled, this.gyroRecalibrateButton.disabled = !e.isGyroEnabled, this.renderTrackingBoneSelect(e);
@@ -394,6 +397,12 @@ var _f = null, vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = new of(hf,
             materialVisibilityOverrides: {
             }
         }))
+    }, onShadowEnabledChanged: e => {
+        Z.setState({
+            settings: {
+...Z.getState().settings, isShadowEnabled: e
+            }
+        }), applyShadowEnabled(e)
     }, onPhysicsSensorEnabledChanged: e => {
         Q.setPhysicsSensorEnabled(e), Z.setState({
             settings: {
@@ -444,12 +453,46 @@ var _f = null, vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = new of(hf,
         Tf()
     }
 }), $ = new pu(wf.getViewerContainer());
+// ACESFilmicToneMapping(4): 水色などの彩度を保ちつつ白飛びを抑制
+$.renderer.toneMapping = 4;
+$.renderer.toneMappingExposure = 0.8;
+// Shadow map setup (PCFSoftShadowMap=2)
+$.renderer.shadowMap.enabled = true;
+$.renderer.shadowMap.type = 2;
+$.scene.traverse(function(obj) {
+    if (obj.isDirectionalLight) {
+        obj.shadow.mapSize.width = 1024;
+        obj.shadow.mapSize.height = 1024;
+        obj.shadow.camera.near = 0.5;
+        obj.shadow.camera.far = 500;
+        obj.shadow.camera.left = -50;
+        obj.shadow.camera.right = 50;
+        obj.shadow.camera.top = 50;
+        obj.shadow.camera.bottom = -50;
+        obj.castShadow = false; // 初期状態OFF
+    }
+});
+function applyShadowEnabled(enabled) {
+    $.scene.traverse(function(obj) {
+        if (obj.isDirectionalLight) obj.castShadow = enabled;
+    });
+    if ($.currentModel !== null) {
+        $.currentModel.traverse(function(obj) {
+            if (obj.isMesh || obj.isSkinnedMesh) {
+                obj.castShadow = enabled;
+                obj.receiveShadow = enabled;
+                const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                mats.forEach(function(m) { if (m) m.needsUpdate = true; });
+            }
+        });
+    }
+}
 Q.setCamera($.getCamera()), $.setGravityVectorProvider({
     getGravityVector: () => Q.getPhysicsSensor().getGravityVector($.getCamera())
 }), Q.setPhysicsSensorEnabled(Z.getState().settings.isPhysicsSensorEnabled), Q.setGravityMagnitude(Z.getState().settings.gravityMagnitude), Q.setPhysicsSensorImpulseSensitivity(Z.getState().settings.physicsSensorImpulseSensitivity), $.setGyroMode(Z.getState().settings.gyroMode), $.setGyroViewpointSensitivity(Z.getState().settings.gyroViewpointSensitivity), $.setGyroModelCenterSensitivity(Z.getState().settings.gyroModelCenterSensitivity), $.setGyroEnabled(Z.getState().isGyroEnabled), $.setTrackingEnabled(Z.getState().settings.isTrackingEnabled), gf.setEnabled(Z.getState().settings.isScreenAwakeEnabled), $.setCameraVmdStateProvider({
     hasActiveCameraMotion: () => Z.getState().activeCameraMotionFileName !== null
 }), $.setFrameUpdater(Q), Q.setDebugModeEnabled(Z.getState().settings.isDebugModeEnabled), Z.subscribe(e => {
-    wf.render(e), $.applySettings(e.settings), Q.setDebugModeEnabled(e.settings.isDebugModeEnabled), $.setGravityArrowVisible(e.settings.isDebugModeEnabled && e.settings.isGravityVectorVisible), $.setRotationCenterMarkerVisible(e.settings.isRotationCenterMarkerVisible && e.loadedModel !== null && e.settings.isTrackingEnabled && e.trackingBoneName !== null)
+    wf.render(e), $.applySettings(e.settings), Q.setDebugModeEnabled(e.settings.isDebugModeEnabled), $.setGravityArrowVisible(e.settings.isDebugModeEnabled && e.settings.isGravityVectorVisible), $.setRotationCenterMarkerVisible(e.settings.isRotationCenterMarkerVisible && e.loadedModel !== null && e.settings.isTrackingEnabled && e.trackingBoneName !== null), applyShadowEnabled(e.settings.isShadowEnabled === true)
 }), Ul(e => {
     Z.setState({
         isFullscreen: e
@@ -480,7 +523,7 @@ async function Tf() {
             return
         } _f !== null && _f.dispose(), _f = n, console.debug(`[main] openFiles: applying model to viewer/controller`, {
             fileName: n.fileName
-        }), $.setModel(n.model), Q.setModel(n.model), Wf(), Gf(), Z.getState().settings.isDebugModeEnabled && $.dumpMaterialDetails();
+        }), $.setModel(n.model), Q.setModel(n.model), Wf(), Gf(), applyShadowEnabled(Z.getState().settings.isShadowEnabled === true), Z.getState().settings.isDebugModeEnabled && $.dumpMaterialDetails();
         let {
             materialVisibilityOverrides: r, suspiciousMaterials: i
         } = Vf(), a = gu(n.model), o = Hf(a);
@@ -720,7 +763,7 @@ async function Tf() {
         if (!Ff(e, `loadPmxFromCachedBlobs`)) {
             n.dispose();
             return
-        } _f !== null && _f.dispose(), _f = n, $.setModel(n.model), Q.setModel(n.model), Wf(), Gf(), Z.getState().settings.isDebugModeEnabled && $.dumpMaterialDetails();
+        } _f !== null && _f.dispose(), _f = n, $.setModel(n.model), Q.setModel(n.model), Wf(), Gf(), applyShadowEnabled(Z.getState().settings.isShadowEnabled === true), Z.getState().settings.isDebugModeEnabled && $.dumpMaterialDetails();
         let {
             materialVisibilityOverrides: r, suspiciousMaterials: i
         } = Vf(), a = gu(n.model), o = Hf(a);

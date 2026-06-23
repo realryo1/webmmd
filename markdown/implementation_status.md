@@ -1,5 +1,13 @@
 # Implementation Status
 
+## 2026-06-23 (最新)
+
+| Item | Status | Details |
+| --- | --- | --- |
+| トーンマッピング改善（色再現修正） | Completed | `handler.js` で `$.renderer.toneMapping = 4`（ACESFilmicToneMapping）、`$.renderer.toneMappingExposure = 0.9` を設定。水色が黒みがかる問題（NoToneMapping時のリニア→sRGB変換でシャドウが暗くなる）と全体的に白っぽい問題（ハイライト白飛び）を解消。SW キャッシュを v10 に更新。 |
+
+---
+
 ## 2026-06-23 (追加)
 
 | Item | Status | Details |
