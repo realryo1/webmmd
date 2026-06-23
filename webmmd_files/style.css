@@ -426,6 +426,12 @@ select {
     inset: auto auto 14px 14px
 }
 
+/* overlay の再生・リセットボタンは常時表示 */
+.overlay-playback-toggle,
+.overlay-reset-button {
+    display: grid !important
+}
+
 .overlay-button {
     color: #f4f7fb;
     cursor: pointer;

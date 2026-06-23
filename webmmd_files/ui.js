@@ -29,6 +29,62 @@ if ("serviceWorker" in navigator) {
   let assetsPathDisplayNode = null;
   const customPathMap = new WeakMap();
 
+  // ---- サウンド ----
+  let currentAudio = null;
+  let currentAudioObjectUrl = null;
+
+  const getSoundStatusNode = () => document.getElementById("sound-status");
+
+  const findAudioFileForMotion = (motionPath) => {
+    const normalized = motionPath.replace(/\\/g, "/");
+    const dotIndex = normalized.lastIndexOf(".");
+    const stem = dotIndex !== -1 ? normalized.slice(0, dotIndex) : normalized;
+    const stemLower = stem.toLowerCase();
+    for (const file of cachedAssetsFiles) {
+      const filePath = toLower(getRelativePath(file));
+      const fileExt = filePath.slice(filePath.lastIndexOf("."));
+      if (fileExt !== ".mp3" && fileExt !== ".wav") continue;
+      const fileStem = filePath.slice(0, filePath.lastIndexOf("."));
+      if (fileStem === stemLower) return file;
+    }
+    return null;
+  };
+
+  const stopCurrentAudio = () => {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+    if (currentAudioObjectUrl) {
+      URL.revokeObjectURL(currentAudioObjectUrl);
+      currentAudioObjectUrl = null;
+    }
+  };
+
+  const loadSoundForMotion = (motionPath) => {
+    stopCurrentAudio();
+    const statusNode = getSoundStatusNode();
+    const audioFile = findAudioFileForMotion(motionPath);
+    if (!audioFile) {
+      if (statusNode) {
+        statusNode.textContent = "存在しませんでした";
+        statusNode.hidden = false;
+      }
+      return;
+    }
+    const url = URL.createObjectURL(audioFile);
+    currentAudioObjectUrl = url;
+    const audio = new Audio(url);
+    const loopInput = document.querySelector(".loop-input");
+    audio.loop = loopInput ? loopInput.checked : false;
+    currentAudio = audio;
+    if (statusNode) {
+      statusNode.textContent = audioFile.name;
+      statusNode.hidden = false;
+    }
+  };
+  // ---- サウンド ここまで ----
+
   const toLower = (value) => value.toLowerCase();
 
   const getRelativePath = (file) => {
@@ -612,8 +668,32 @@ if ("serviceWorker" in navigator) {
           selectedAssetsMotionPath = toLower(path);
           localStorage.setItem(ASSETS_SELECTED_MOTION_PATH_KEY, path);
           loadMotionByPath(path);
+          loadSoundForMotion(path);
         },
       });
+
+      // 初期ポーズ ラジオを先頭に挿入
+      const initialPoseRow = document.createElement("label");
+      initialPoseRow.className = "motion-entry";
+      const initialPoseRadio = document.createElement("input");
+      initialPoseRadio.type = "radio";
+      initialPoseRadio.name = "assets-motion-choice";
+      initialPoseRadio.checked = !selectedAssetsMotionPath;
+      initialPoseRadio.addEventListener("change", () => {
+        if (!initialPoseRadio.checked) return;
+        selectedAssetsMotionPath = "";
+        localStorage.removeItem(ASSETS_SELECTED_MOTION_PATH_KEY);
+        stopCurrentAudio();
+        const statusNode = getSoundStatusNode();
+        if (statusNode) statusNode.textContent = "モーションを選択すると音声ファイルを検索します。";
+        const poseResetBtn = document.querySelector(".pose-reset-button");
+        if (poseResetBtn && !poseResetBtn.disabled) poseResetBtn.click();
+      });
+      const initialPoseText = document.createElement("span");
+      initialPoseText.className = "motion-name";
+      initialPoseText.textContent = "初期ポーズ";
+      initialPoseRow.append(initialPoseRadio, initialPoseText);
+      motionListNode.prepend(initialPoseRow);
     };
 
     const scan = () => {
@@ -746,6 +826,78 @@ if ("serviceWorker" in navigator) {
         subtree: true,
       });
     }
+
+    // ---- サウンド再生同期フック ----
+    const playPauseButton = document.querySelector(".play-pause-button");
+    if (playPauseButton && playPauseButton.dataset.soundHooked !== "1") {
+      playPauseButton.dataset.soundHooked = "1";
+      // capture:true で UIClass より先に発火 → クリック前のテキスト（現在の状態）を読む
+      // "再生" = 現在停止中 → このクリックで再生開始 → play()
+      // "一時停止" = 現在再生中 → このクリックで停止 → pause()
+      playPauseButton.addEventListener("click", () => {
+        if (!currentAudio) return;
+        if (playPauseButton.textContent.trim() === "再生") {
+          currentAudio.play().catch((err) => console.warn("[sound] play failed:", err));
+        } else {
+          currentAudio.pause();
+        }
+      }, true);
+    }
+
+    const overlayPlaybackButton = document.querySelector(".overlay-playback-toggle");
+    if (overlayPlaybackButton && overlayPlaybackButton.dataset.soundHooked !== "1") {
+      overlayPlaybackButton.dataset.soundHooked = "1";
+      // aria-label でクリック前の状態を読む（"再生" = 現在停止中 → play）
+      overlayPlaybackButton.addEventListener("click", () => {
+        if (!currentAudio) return;
+        if (overlayPlaybackButton.getAttribute("aria-label") === "再生") {
+          currentAudio.play().catch((err) => console.warn("[sound] overlay play failed:", err));
+        } else {
+          currentAudio.pause();
+        }
+      }, true);
+    }
+
+    const resetButton = document.querySelector(".reset-button");
+    if (resetButton && resetButton.dataset.soundHooked !== "1") {
+      resetButton.dataset.soundHooked = "1";
+      resetButton.addEventListener("click", () => {
+        if (!currentAudio) return;
+        const wasPlaying = !currentAudio.paused;
+        currentAudio.currentTime = 0;
+        if (wasPlaying) currentAudio.play().catch(() => {});
+      });
+    }
+
+    const overlayResetButton = document.querySelector(".overlay-reset-button");
+    if (overlayResetButton && overlayResetButton.dataset.soundHooked !== "1") {
+      overlayResetButton.dataset.soundHooked = "1";
+      overlayResetButton.addEventListener("click", () => {
+        if (!currentAudio) return;
+        const wasPlaying = !currentAudio.paused;
+        currentAudio.currentTime = 0;
+        if (wasPlaying) currentAudio.play().catch(() => {});
+      });
+    }
+
+    const poseResetButton = document.querySelector(".pose-reset-button");
+    if (poseResetButton && poseResetButton.dataset.soundHooked !== "1") {
+      poseResetButton.dataset.soundHooked = "1";
+      poseResetButton.addEventListener("click", () => {
+        if (!currentAudio) return;
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      });
+    }
+
+    const loopInput = document.querySelector(".loop-input");
+    if (loopInput && loopInput.dataset.soundHooked !== "1") {
+      loopInput.dataset.soundHooked = "1";
+      loopInput.addEventListener("change", () => {
+        if (currentAudio) currentAudio.loop = loopInput.checked;
+      });
+    }
+    // ---- サウンド再生同期フック ここまで ----
 
     updateStatus(STATUS_DEFAULT);
     renderIndexed();
