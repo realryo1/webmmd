@@ -172,5 +172,5 @@ assets/
 - `webmmd_files/logic.js` はページロード時に `#app` を書き換えるため、`setupIfReady()` は何度呼ばれても冪等になっている（`data-assetsEnhanced="1"` ガード）
 - `MutationObserver` で `#app` の変化を監視して `setupIfReady()` と `enforcePanelOrder()` を再適用している
 - Service Worker は HTTPS または localhost でのみ有効。`file://` では登録できない
-- キャッシュ定義は `sw.js` の `webmmd-cache-v3` / `APP_SHELL` を参照（`logic.js` / `handler.js` / `ui.js` / `style.css` を事前キャッシュ）
+- キャッシュ定義は `sw.js` の `webmmd-cache-v8` / `APP_SHELL` を参照（`logic.js` / `handler.js` / `ui.js` / `style.css` を事前キャッシュ）
 - `handler.js` を編集した後は `handler/build_handler.py` → `handler/fix_handler.py` の順で再生成する
