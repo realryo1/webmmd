@@ -1,0 +1,787 @@
+of = class {
+    handlers;
+    root;
+    fileInput;
+    loadedModelName;
+    pendingModelLoadName;
+    modelFileError;
+    motionInput;
+    pendingMotionLoadNames;
+    motionFileError;
+    cameraMotionInput;
+    pendingCameraMotionLoadNames;
+    cameraMotionFileError;
+    cameraControlsPanel;
+    gyroInput;
+    gyroModeInputs;
+    gyroViewpointSensitivityInput;
+    gyroModelCenterSensitivityInput;
+    gyroRecalibrateButton;
+    trackingBoneField;
+    trackingEnabledInput;
+    trackingBoneSelect;
+    playPauseButton;
+    resetButton;
+    loopInput;
+    motionList;
+    cameraMotionList;
+    colorInput;
+    backgroundModeSelect;
+    autoRestoreInput;
+    screenAwakeInput;
+    debugModeInput;
+    physicsSensorInput;
+    gravityMagnitudeInput;
+    gravityMagnitudeValue;
+    physicsSensorImpulseSensitivityInput;
+    physicsSensorRecalibrateButton;
+    gravityVectorField;
+    gravityVectorInput;
+    storageUsageElement;
+    rotationCenterMarkerInput;
+    materialOverridePanel;
+    materialSelectAllButton;
+    materialClearAllButton;
+    materialOverrideList;
+    clearCacheButton;
+    viewerOverlay;
+    fullscreenToggleButton;
+    overlayPlaybackButton;
+    overlayResetButton;
+    overlayGyroRecalibrateButton;
+    statusText;
+    viewerContainer;
+    viewerLoading;
+    lastRenderedMotionListKey = null;
+    lastRenderedCameraMotionListKey = null;
+    lastRenderedTrackingBoneSelectKey = null;
+    lastRenderedMaterialOverrideListKey = null;
+    constructor(e, t) {
+        this.handlers = t, this.root = e.querySelector(`.app-shell`) || document.querySelector(`.app-shell`), this.fileInput = document.querySelector(`.file-input`), this.loadedModelName = document.querySelector(`.loaded-model-name`), this.pendingModelLoadName = document.querySelector(`.pending-model-load`), this.modelFileError = document.querySelector(`.file-error--model`), this.motionInput = document.querySelector(`.motion-input`), this.pendingMotionLoadNames = document.querySelector(`.pending-motion-load`), this.motionFileError = document.querySelector(`.file-error--motion`), this.cameraMotionInput = document.querySelector(`.camera-motion-input`), this.pendingCameraMotionLoadNames = document.querySelector(`.pending-camera-motion-load`), this.cameraMotionFileError = document.querySelector(`.file-error--camera`), this.cameraControlsPanel = document.querySelector(`.camera-controls-panel`), this.gyroInput = document.querySelector(`.gyro-input`), this.gyroModeInputs = Array.from(document.querySelectorAll(`.gyro-mode-input`)), this.gyroViewpointSensitivityInput = document.querySelector(`.gyro-sensitivity-input--viewpoint`), this.gyroModelCenterSensitivityInput = document.querySelector(`.gyro-sensitivity-input--model-center`), this.gyroRecalibrateButton = document.querySelector(`.gyro-recalibrate-button`), this.trackingBoneField = document.querySelector(`.tracking-bone-field`), this.trackingEnabledInput = document.querySelector(`.tracking-enabled-input`), this.trackingBoneSelect = document.querySelector(`.tracking-bone-select`), this.playPauseButton = document.querySelector(`.play-pause-button`), this.resetButton = document.querySelector(`.reset-button`), this.poseResetButton = document.querySelector(`.pose-reset-button`), this.loopInput = document.querySelector(`.loop-input`), this.motionList = document.createElement(`div`), this.cameraMotionList = document.querySelector(`.camera-motion-list`), this.colorInput = document.querySelector(`.color-input`), this.backgroundModeSelect = document.querySelector(`.mode-select`), this.autoRestoreInput = document.querySelector(`.auto-restore-input`), this.screenAwakeInput = document.querySelector(`.screen-awake-toggle`), this.debugModeInput = document.querySelector(`.debug-mode-toggle`), this.physicsSensorInput = document.querySelector(`.physics-sensor-toggle`), this.gravityMagnitudeInput = document.querySelector(`.gravity-magnitude-input`), this.gravityMagnitudeValue = document.querySelector(`.gravity-magnitude-value`), this.physicsSensorImpulseSensitivityInput = document.querySelector(`.physics-sensor-impulse-sensitivity-input`), this.physicsSensorRecalibrateButton = document.querySelector(`.physics-sensor-recalibrate-button`), this.gravityVectorField = document.querySelector(`.gravity-vector-field`), this.gravityVectorInput = document.querySelector(`.gravity-vector-toggle`), this.storageUsageElement = document.querySelector(`.storage-usage`), this.rotationCenterMarkerInput = document.querySelector(`.rotation-center-marker-toggle`), this.materialOverridePanel = document.querySelector(`.material-override-panel`), this.materialSelectAllButton = document.querySelector(`.material-select-all-button`), this.materialClearAllButton = document.querySelector(`.material-clear-all-button`), this.materialOverrideList = document.querySelector(`.material-override-list`), this.clearCacheButton = document.querySelector(`.clear-cache-button`), this.viewerOverlay = document.querySelector(`.viewer-overlay`), this.fullscreenToggleButton = document.querySelector(`.fullscreen-toggle`), this.overlayPlaybackButton = document.querySelector(`.overlay-playback-toggle`), this.overlayResetButton = document.querySelector(`.overlay-reset-button`), this.overlayGyroRecalibrateButton = document.querySelector(`.overlay-gyro-recalibrate-button`), this.statusText = document.querySelector(`.status`), this.viewerContainer = document.querySelector(`.viewer`), this.viewerLoading = document.querySelector(`.viewer-loading`), this.viewerCanvas = this.viewerContainer ? .querySelector(`.viewer-canvas`), this.fileInput ? .addEventListener(`change`, () => {
+            this.fileInput.files !== null && this.fileInput.files.length > 0 && this.handlers.onFilesSelected(this.fileInput.files)
+        }), this.motionInput ? .addEventListener(`change`, () => {
+            if (this.motionInput.files !== null) {
+                if (this.motionInput.files.length > 0) {
+                    this.handlers.onMotionFilesSelected(Array.from(this.motionInput.files)), this.motionInput.value = ``
+                } else {
+                    this.handlers.onClearMotionFiles ? .()
+                }
+            }
+        }), this.cameraMotionInput ? .addEventListener(`change`, () => {
+            this.cameraMotionInput.files !== null && this.cameraMotionInput.files.length > 0 && (this.handlers.onCameraFilesSelected(Array.from(this.cameraMotionInput.files)), this.cameraMotionInput.value = ``)
+        }), this.gyroInput ? .addEventListener(`change`, () => {
+            this.handlers.onGyroEnabledChanged(this.gyroInput.checked)
+        });
+        for (let e of this.gyroModeInputs) e.addEventListener(`change`, () => {
+            e.checked && this.handlers.onGyroModeChanged(e.value)
+        });
+        this.gyroViewpointSensitivityInput ? .addEventListener(`input`, () => {
+            this.handlers.onGyroViewpointSensitivityChanged(Number(this.gyroViewpointSensitivityInput.value))
+        }), this.gyroModelCenterSensitivityInput ? .addEventListener(`input`, () => {
+            this.handlers.onGyroModelCenterSensitivityChanged(Number(this.gyroModelCenterSensitivityInput.value))
+        }), this.gyroRecalibrateButton ? .addEventListener(`click`, () => {
+            this.handlers.onGyroRecalibrate()
+        }), this.trackingEnabledInput ? .addEventListener(`change`, () => {
+            this.handlers.onTrackingEnabledChanged(this.trackingEnabledInput.checked)
+        }), this.trackingBoneSelect ? .addEventListener(`change`, () => {
+            this.handlers.onTrackingBoneChanged(this.trackingBoneSelect.value)
+        }), this.playPauseButton ? .addEventListener(`click`, () => {
+            this.handlers.onPlayPauseToggled()
+        }), this.resetButton ? .addEventListener(`click`, () => {
+            this.handlers.onResetRequested()
+        }), this.poseResetButton ? .addEventListener(`click`, () => {
+            this.handlers.onPoseResetRequested()
+        }), this.loopInput ? .addEventListener(`change`, () => {
+            this.handlers.onLoopChanged(this.loopInput.checked)
+        }), this.colorInput ? .addEventListener(`input`, () => {
+            this.handlers.onBackgroundColorChanged(this.colorInput.value)
+        }), this.backgroundModeSelect ? .addEventListener(`change`, () => {
+            this.handlers.onBackgroundModeChanged(this.backgroundModeSelect.value)
+        }), this.autoRestoreInput ? .addEventListener(`change`, () => {
+            this.handlers.onAutoRestoreChanged(this.autoRestoreInput.checked)
+        }), this.screenAwakeInput ? .addEventListener(`change`, () => {
+            this.handlers.onScreenAwakeEnabledChanged(this.screenAwakeInput.checked)
+        }), this.debugModeInput ? .addEventListener(`change`, () => {
+            this.handlers.onDebugModeChanged(this.debugModeInput.checked)
+        }), this.physicsSensorInput ? .addEventListener(`change`, () => {
+            this.handlers.onPhysicsSensorEnabledChanged(this.physicsSensorInput.checked)
+        }), this.gravityMagnitudeInput ? .addEventListener(`input`, () => {
+            this.handlers.onGravityMagnitudeChanged(Number(this.gravityMagnitudeInput.value))
+        }), this.physicsSensorImpulseSensitivityInput ? .addEventListener(`input`, () => {
+            this.handlers.onPhysicsSensorImpulseSensitivityChanged(Number(this.physicsSensorImpulseSensitivityInput.value))
+        }), this.physicsSensorRecalibrateButton ? .addEventListener(`click`, () => {
+            this.handlers.onPhysicsSensorRecalibrate()
+        }), this.gravityVectorInput ? .addEventListener(`change`, () => {
+            this.handlers.onGravityVectorVisibilityChanged(this.gravityVectorInput.checked)
+        }), this.rotationCenterMarkerInput ? .addEventListener(`change`, () => {
+            this.handlers.onRotationCenterMarkerVisibilityChanged(this.rotationCenterMarkerInput.checked)
+        }), this.materialSelectAllButton ? .addEventListener(`click`, () => {
+            this.handlers.onAllMaterialOverridesChanged(!0)
+        }), this.materialClearAllButton ? .addEventListener(`click`, () => {
+            this.handlers.onAllMaterialOverridesChanged(!1)
+        }), this.clearCacheButton ? .addEventListener(`click`, () => {
+            this.handlers.onClearCache()
+        }), this.fullscreenToggleButton ? .addEventListener(`click`, () => {
+            this.handlers.onFullscreenToggled()
+        }), this.overlayPlaybackButton ? .addEventListener(`click`, () => {
+            this.handlers.onPlayPauseToggled()
+        }), this.overlayResetButton ? .addEventListener(`click`, () => {
+            this.handlers.onResetRequested()
+        }), this.overlayGyroRecalibrateButton ? .addEventListener(`click`, () => {
+            this.handlers.onGyroRecalibrate()
+        })
+    } getViewerContainer() {
+        return this.viewerContainer
+    } setStorageUsageText(e) {
+        this.storageUsageElement.textContent = e
+    } render(e) {
+        let t = e.isLoading || e.isMotionLoading || e.isCameraMotionLoading;
+        sf(this.colorInput, e.settings.backgroundColor), this.loadedModelName.textContent = e.loadedModel ? .fileName ? ? ``, this.loadedModelName.hidden = e.loadedModel === null, lf(this.pendingModelLoadName, e.pendingModelLoadName), uf(this.pendingMotionLoadNames, e.pendingMotionLoadNames), uf(this.pendingCameraMotionLoadNames, e.pendingCameraMotionLoadNames), cf(this.modelFileError, e.modelLoadError), cf(this.motionFileError, e.motionLoadError), cf(this.cameraMotionFileError, e.cameraMotionLoadError), this.backgroundModeSelect.value = e.settings.backgroundMode, this.autoRestoreInput.checked = e.settings.isAutoRestoreEnabled, this.screenAwakeInput.checked = e.settings.isScreenAwakeEnabled, this.debugModeInput.checked = e.settings.isDebugModeEnabled, this.physicsSensorInput.checked = e.settings.isPhysicsSensorEnabled, sf(this.gravityMagnitudeInput, String(e.settings.gravityMagnitude)), this.gravityMagnitudeValue.textContent = e.settings.gravityMagnitude.toFixed(1), sf(this.physicsSensorImpulseSensitivityInput, String(e.settings.physicsSensorImpulseSensitivity)), this.physicsSensorImpulseSensitivityInput.disabled = !e.settings.isPhysicsSensorEnabled, this.physicsSensorRecalibrateButton.disabled = !e.settings.isPhysicsSensorEnabled, this.gravityVectorField.hidden = !e.settings.isDebugModeEnabled, this.gravityVectorInput.checked = e.settings.isGravityVectorVisible, this.rotationCenterMarkerInput.checked = e.settings.isRotationCenterMarkerVisible, this.renderMaterialOverrideList(e), this.viewerOverlay.classList.toggle(`viewer-overlay--fullscreen`, e.isFullscreen), this.fullscreenToggleButton.innerHTML = e.isFullscreen ? $d: Qd, this.fullscreenToggleButton.setAttribute(`aria-label`, e.isFullscreen ? Yd: Jd), this.overlayPlaybackButton.innerHTML = e.isPlaying ? tf: ef, this.overlayPlaybackButton.setAttribute(`aria-label`, e.isPlaying ? Ud: Hd), this.fileInput.disabled = e.isLoading, this.motionInput.disabled = e.isLoading || e.loadedModel === null, this.cameraMotionInput.disabled = e.isLoading || e.isCameraMotionLoading, this.cameraControlsPanel.hidden = e.loadedModel === null, this.gyroInput.checked = e.isGyroEnabled;
+        let n = e.settings.gyroMode;
+        for (let t of this.gyroModeInputs) t.checked = t.value === n, t.disabled = !e.isGyroEnabled;
+        sf(this.gyroViewpointSensitivityInput, String(e.settings.gyroViewpointSensitivity)), sf(this.gyroModelCenterSensitivityInput, String(e.settings.gyroModelCenterSensitivity)), this.gyroViewpointSensitivityInput.disabled = !e.isGyroEnabled, this.gyroModelCenterSensitivityInput.disabled = !e.isGyroEnabled, this.gyroRecalibrateButton.disabled = !e.isGyroEnabled, this.renderTrackingBoneSelect(e);
+        let r = e.loadedMotions.some(e => e.isActive), i = e.activeCameraMotionFileName !== null, a = e.loadedMotions.length > 0 || e.loadedCameraMotions.length > 0;
+        if (this.playPauseButton.disabled = e.isLoading || e.isMotionLoading || e.isCameraMotionLoading || !r && !i, this.resetButton.disabled = e.isLoading || e.isMotionLoading || e.isCameraMotionLoading || e.loadedModel === null || !a, this.poseResetButton.disabled = e.isLoading || e.loadedModel === null, this.overlayPlaybackButton.hidden = !e.isFullscreen, this.overlayResetButton.hidden = !e.isFullscreen, this.overlayGyroRecalibrateButton.hidden = !e.isFullscreen || !e.isGyroEnabled, this.overlayPlaybackButton.disabled = this.playPauseButton.disabled, this.overlayResetButton.disabled = this.resetButton.disabled, this.overlayGyroRecalibrateButton.disabled = !e.isGyroEnabled, this.loopInput.checked = e.isLooping, this.loopInput.disabled = e.isLoading || e.isMotionLoading || e.isCameraMotionLoading, this.playPauseButton.textContent = e.isPlaying ? Ud: Hd, this.renderCameraMotionList(e), this.viewerLoading.hidden = !t, t) {
+            this.statusText.textContent = Wd;
+            return
+        } if (e.errorMessage !== null) {
+            this.statusText.textContent = e.errorMessage;
+            return
+        } this.statusText.textContent = e.loadedModel === null ? qd: ``
+    } renderCameraMotionList(e) {
+        let t = [e.loadedCameraMotions.map(e => e.fileName).join(`|`), e.activeCameraMotionFileName ? ? ``, String(e.isLoading), String(e.isCameraMotionLoading)].join(`::`);
+        if (t === this.lastRenderedCameraMotionListKey) return ;
+        this.lastRenderedCameraMotionListKey = t, this.cameraMotionList.replaceChildren();
+        let n = document.createElement(`label`);
+        n.className = `motion-entry`;
+        let r = document.createElement(`input`);
+        r.type = `radio`, r.name = `camera-motion`, r.checked = e.activeCameraMotionFileName === null, r.disabled = e.isLoading || e.isCameraMotionLoading, r.addEventListener(`change`, () => {
+            r.checked && this.handlers.onActiveCameraMotionChanged(null)
+        });
+        let i = document.createElement(`span`);
+        i.textContent = Kd, n.append(r, i), this.cameraMotionList.append(n);
+        for (let t of e.loadedCameraMotions) {
+            let n = document.createElement(`label`);
+            n.className = `motion-entry`;
+            let r = document.createElement(`input`);
+            r.type = `radio`, r.name = `camera-motion`, r.checked = e.activeCameraMotionFileName === t.fileName, r.disabled = e.isLoading || e.isCameraMotionLoading, r.addEventListener(`change`, () => {
+                r.checked && this.handlers.onActiveCameraMotionChanged(t.fileName)
+            });
+            let i = document.createElement(`span`);
+            i.className = `motion-name`, i.textContent = t.fileName;
+            let a = this.createMotionRemoveButton(() => this.handlers.onCameraMotionRemove(t.fileName), e.isLoading || e.isCameraMotionLoading);
+            n.append(r, i, a), this.cameraMotionList.append(n)
+        }
+    } createMotionRemoveButton(e, t) {
+        let n = document.createElement(`button`);
+        return n.className = `motion-remove-button`, n.type = `button`, n.disabled = t, n.setAttribute(`aria-label`, `削除`), n.innerHTML = af, n.addEventListener(`click`, t => {
+            t.preventDefault(), t.stopPropagation(), e()
+        }), n
+    } renderTrackingBoneSelect(e) {
+        let t = e.loadedModel !== null;
+        this.trackingBoneField.hidden = !t, this.trackingEnabledInput.checked = e.settings.isTrackingEnabled, this.trackingEnabledInput.disabled = !t, this.trackingBoneSelect.disabled = !t || !e.settings.isTrackingEnabled || (e.loadedModel ? .availableBoneNames.length ? ? 0) === 0;
+        let n = [String(t), String(e.settings.isTrackingEnabled), e.loadedModel ? .availableBoneNames.join(`|`) ? ? ``, e.trackingBoneName ? ? ``].join(`::`);
+        if (n !== this.lastRenderedTrackingBoneSelectKey) {
+            if (this.lastRenderedTrackingBoneSelectKey = n, this.trackingBoneSelect.replaceChildren(), e.loadedModel !== null) for (let t of e.loadedModel.availableBoneNames) {
+                let e = document.createElement(`option`);
+                e.value = t, e.textContent = t, this.trackingBoneSelect.append(e)
+            } this.trackingBoneSelect.value = e.trackingBoneName ? ? ``
+        }
+    } renderMaterialOverrideList(e) {
+        let t = e.settings.isDebugModeEnabled && e.suspiciousMaterials.length > 0;
+        this.materialOverridePanel.hidden = !t, this.materialSelectAllButton.disabled = !t, this.materialClearAllButton.disabled = !t;
+        let n = [String(t), e.suspiciousMaterials.map(t => `${t.name}:${String(e.materialVisibilityOverrides[t.name]===!0)}`).join(`|`)].join(`::`);
+        if (n !== this.lastRenderedMaterialOverrideListKey && (this.lastRenderedMaterialOverrideListKey = n, this.materialOverrideList.replaceChildren(), t)) for (let t of e.suspiciousMaterials) {
+            let n = document.createElement(`li`);
+            n.className = `material-override-entry`;
+            let r = document.createElement(`label`);
+            r.className = `checkbox-field`;
+            let i = document.createElement(`input`);
+            i.type = `checkbox`, i.checked = e.materialVisibilityOverrides[t.name] === !0, i.addEventListener(`change`, () => {
+                this.handlers.onMaterialOverrideChanged(t.name, i.checked)
+            });
+            let a = document.createElement(`span`);
+            a.textContent = t.name === `` ? `(unnamed)`: t.name;
+            let o = document.createElement(`span`);
+            o.className = `material-override-detail`, o.textContent = `opacity=${t.originalOpacity}, transparent=${String(t.originalTransparent)}`, r.append(i, a), n.append(r, o), this.materialOverrideList.append(n)
+        }
+    }
+};
+function sf(e, t) {
+    let n = t;
+    if (e.type === `range`) {
+        let r = e.getAttribute(`step`), i = Number(t);
+        if (!Number.isNaN(i) && r !== null && r !== `any`) {
+            let e = (r.split(`.`)[1] ? ? ``).length;
+            n = i.toFixed(e)
+        }
+    } e.value !== n && (e.value = n)
+} function cf(e, t) {
+    e.textContent = t ? ? ``, e.hidden = t === null
+} function lf(e, t) {
+    e.textContent = t === null ? ``: `\u51e6\u7406\u4e2d: ${t}`, e.hidden = t === null
+} function uf(e, t) {
+    e.textContent = t.length === 0 ? ``: `\u51e6\u7406\u4e2d: ${t.join(`, `)}`, e.hidden = t.length === 0
+} var df = `先に PMX モチE��を読み込んでください。`, ff = `VMD モーションをモチE��へ適用できませんでした。`, pf = `モチE��の読み込みに失敗しました。`, mf = [ / \u8155 / , / \u3046\u3067 / , / \u624b / , / \u6307 / , / \u808c / , / \u7d20\u808c / , / \u4f53 / , / \u30dc\u30c7\u30a3 / , / skin / i, / arm / i, / hand / i, / body / i], hf = document.querySelector(`#app`);
+if (hf === null) throw Error(`#app element was not found.`);
+var Z = new jd, gf = new mu, Q = new Il(Wl());
+Q.setPlaybackFinishedCallback(() => {
+    Z.setState({
+        isPlaying: !1
+    })
+});
+var _f = null, vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = new of(hf, {
+    onFilesSelected: e => {
+        Ef(e)
+    }, onMotionFilesSelected: e => {
+        Q.resetMotions(), Df(e)
+    }, onMotionActiveChanged: (e, t) => {
+        jf(e, t)
+    }, onMotionRemove: e => {
+        kf(e)
+    }, onClearMotionFiles: () => {
+        Wf()
+    }, onCameraFilesSelected: e => {
+        Of(e)
+    }, onActiveCameraMotionChanged: e => {
+        Mf(e)
+    }, onCameraMotionRemove: e => {
+        Af(e)
+    }, onGyroEnabledChanged: e => {
+        $.setGyroEnabled(e), Z.setState({
+            isGyroEnabled: e, settings: {
+...Z.getState().settings, isGyroEnabled: e
+            }
+        })
+    }, onGyroModeChanged: e => {
+        $.setGyroMode(e), Z.setState({
+            settings: {
+...Z.getState().settings, gyroMode: e
+            }
+        })
+    }, onGyroViewpointSensitivityChanged: e => {
+        $.setGyroViewpointSensitivity(e), Z.setState({
+            settings: {
+...Z.getState().settings, gyroViewpointSensitivity: e
+            }
+        })
+    }, onGyroModelCenterSensitivityChanged: e => {
+        $.setGyroModelCenterSensitivity(e), Z.setState({
+            settings: {
+...Z.getState().settings, gyroModelCenterSensitivity: e
+            }
+        })
+    }, onGyroRecalibrate: () => {
+        $.recalibrateGyro()
+    }, onTrackingEnabledChanged: e => {
+        $.setTrackingEnabled(e), Z.setState({
+            settings: {
+...Z.getState().settings, isTrackingEnabled: e
+            }
+        })
+    }, onTrackingBoneChanged: e => {
+        $.setTrackingBone(e), Z.setState({
+            trackingBoneName: e, settings: {
+...Z.getState().settings, trackingBoneName: e
+            }
+        })
+    }, onPlayPauseToggled: () => {
+        let e = !Z.getState().isPlaying;
+        Q.setPlaying(e), Z.setState({
+            isPlaying: e
+        })
+    }, onResetRequested: () => {
+        Q.resetMotions()
+    }, onPoseResetRequested: () => {
+        Q.resetMotions()
+    }, onLoopChanged: e => {
+        Q.setLooping(e), Z.setState({
+            isLooping: e
+        }), Lf()
+    }, onBackgroundColorChanged: e => {
+        Z.setState({
+            settings: {
+...Z.getState().settings, backgroundColor: e
+            }
+        })
+    }, onBackgroundModeChanged: e => {
+        Z.setState({
+            settings: {
+...Z.getState().settings, backgroundMode: e
+            }
+        })
+    }, onAutoRestoreChanged: e => {
+        Z.setState({
+            settings: {
+...Z.getState().settings, isAutoRestoreEnabled: e
+            }
+        })
+    }, onScreenAwakeEnabledChanged: e => {
+        Z.setState({
+            settings: {
+...Z.getState().settings, isScreenAwakeEnabled: e
+            }
+        }), gf.setEnabled(e)
+    }, onDebugModeChanged: e => {
+        Z.setState({
+            settings: {
+...Z.getState().settings, isDebugModeEnabled: e
+            }
+        }), e ? $.dumpMaterialDetails(): ($.applyMaterialOverrides({
+        }), Z.setState({
+            materialVisibilityOverrides: {
+            }
+        }))
+    }, onPhysicsSensorEnabledChanged: e => {
+        Q.setPhysicsSensorEnabled(e), Z.setState({
+            settings: {
+...Z.getState().settings, isPhysicsSensorEnabled: e
+            }
+        })
+    }, onGravityMagnitudeChanged: e => {
+        Q.setGravityMagnitude(e), Z.setState({
+            settings: {
+...Z.getState().settings, gravityMagnitude: e
+            }
+        })
+    }, onPhysicsSensorImpulseSensitivityChanged: e => {
+        Q.setPhysicsSensorImpulseSensitivity(e), Z.setState({
+            settings: {
+...Z.getState().settings, physicsSensorImpulseSensitivity: e
+            }
+        })
+    }, onPhysicsSensorRecalibrate: () => {
+        Q.recalibratePhysicsSensor()
+    }, onGravityVectorVisibilityChanged: e => {
+        Z.setState({
+            settings: {
+...Z.getState().settings, isGravityVectorVisible: e
+            }
+        })
+    }, onRotationCenterMarkerVisibilityChanged: e => {
+        Z.setState({
+            settings: {
+...Z.getState().settings, isRotationCenterMarkerVisible: e
+            }
+        })
+    }, onMaterialOverrideChanged: (e, t) => {
+        let n = {
+...Z.getState().materialVisibilityOverrides, [e]: t
+        };
+        $.applyMaterialOverrides(n), Z.setState({
+            materialVisibilityOverrides: n
+        })
+    }, onAllMaterialOverridesChanged: e => {
+        let t = Object.fromEntries(Z.getState().suspiciousMaterials.map(t => [t.name, e]));
+        $.applyMaterialOverrides(t), Z.setState({
+            materialVisibilityOverrides: t
+        })
+    }, onClearCache: () => {
+        Uf()
+    }, onFullscreenToggled: () => {
+        Tf()
+    }
+}), $ = new pu(wf.getViewerContainer());
+Q.setCamera($.getCamera()), $.setGravityVectorProvider({
+    getGravityVector: () => Q.getPhysicsSensor().getGravityVector($.getCamera())
+}), Q.setPhysicsSensorEnabled(Z.getState().settings.isPhysicsSensorEnabled), Q.setGravityMagnitude(Z.getState().settings.gravityMagnitude), Q.setPhysicsSensorImpulseSensitivity(Z.getState().settings.physicsSensorImpulseSensitivity), $.setGyroMode(Z.getState().settings.gyroMode), $.setGyroViewpointSensitivity(Z.getState().settings.gyroViewpointSensitivity), $.setGyroModelCenterSensitivity(Z.getState().settings.gyroModelCenterSensitivity), $.setGyroEnabled(Z.getState().isGyroEnabled), $.setTrackingEnabled(Z.getState().settings.isTrackingEnabled), gf.setEnabled(Z.getState().settings.isScreenAwakeEnabled), $.setCameraVmdStateProvider({
+    hasActiveCameraMotion: () => Z.getState().activeCameraMotionFileName !== null
+}), $.setFrameUpdater(Q), Q.setDebugModeEnabled(Z.getState().settings.isDebugModeEnabled), Z.subscribe(e => {
+    wf.render(e), $.applySettings(e.settings), Q.setDebugModeEnabled(e.settings.isDebugModeEnabled), $.setGravityArrowVisible(e.settings.isDebugModeEnabled && e.settings.isGravityVectorVisible), $.setRotationCenterMarkerVisible(e.settings.isRotationCenterMarkerVisible && e.loadedModel !== null && e.settings.isTrackingEnabled && e.trackingBoneName !== null)
+}), Ul(e => {
+    Z.setState({
+        isFullscreen: e
+    })
+}), Nf(), Rf();
+async function Tf() {
+    try {
+        if (Hl()) {
+            await Vl();
+            return
+        } await Bl(wf.getViewerContainer())
+    } catch (e) {
+        console.warn(`[fullscreen] toggle failed`, e)
+    }
+} async function Ef(e) {
+    let t = ++ xf;
+    Sf + = 1, Cf + = 1, Pf(`openFiles`), console.debug(`[main] openFiles: start`, {
+        fileCount: e.length, loadGeneration: t
+    }), If(`openFiles:start`, [`isLoading`, `isMotionLoading`, `isCameraMotionLoading`, `errorMessage`, `pendingModelLoadName`, `pendingMotionLoadNames`, `pendingCameraMotionLoadNames`]), Z.setState({
+        isLoading: !0, isMotionLoading: !1, isCameraMotionLoading: !1, errorMessage: null, modelLoadError: null, pendingModelLoadName: e.length > 0 ? e[0].name: null, pendingMotionLoadNames: [], pendingCameraMotionLoadNames: []
+    });
+    try {
+        let n = await zu(e);
+        if (t !== xf) {
+            console.debug(`[main] openFiles: ignored stale result`, {
+                loadGeneration: t, currentGeneration: xf
+            }), n.dispose();
+            return
+        } _f !== null && _f.dispose(), _f = n, console.debug(`[main] openFiles: applying model to viewer/controller`, {
+            fileName: n.fileName
+        }), $.setModel(n.model), Q.setModel(n.model), Wf(), Gf(), Z.getState().settings.isDebugModeEnabled && $.dumpMaterialDetails();
+        let {
+            materialVisibilityOverrides: r, suspiciousMaterials: i
+        } = Vf(), a = gu(n.model), o = Hf(a);
+        $.setTrackingBone(o), xd(n.cachedBlobs).catch (e => {
+            console.warn(`[main] saveCurrentModel: failed`, e)
+        }), Rf(), If(`openFiles:success`, [`isLoading`, `isPlaying`, `hasMotion`, `loadedModel`, `loadedMotions`, `loadedCameraMotions`, `activeCameraMotionFileName`, `trackingBoneName`, `settings.trackingBoneName`, `modelLoadError`, `pendingModelLoadName`]), Z.setState({
+            isLoading: !1, isPlaying: !1, hasMotion: !1, modelLoadError: null, pendingModelLoadName: null, loadedMotions: [], loadedCameraMotions: [], suspiciousMaterials: i, materialVisibilityOverrides: r, activeCameraMotionFileName: null, trackingBoneName: o, settings: {
+...Z.getState().settings, trackingBoneName: o
+            }, loadedModel: {
+                fileName: n.fileName, object: n.model, availableBoneNames: a
+            }
+        }), console.debug(`[main] openFiles: complete`, {
+            loadGeneration: t, fileName: n.fileName, modelType: n.model.type, childrenLength: n.model.children.length
+        })
+    } catch (e) {
+        if (t !== xf) {
+            console.debug(`[main] openFiles: ignored stale error`, {
+                loadGeneration: t, currentGeneration: xf
+            });
+            return
+        } console.error(`[main] openFiles: error`, e), If(`openFiles:error`, [`isLoading`, `isPlaying`, `hasMotion`, `loadedModel`, `loadedMotions`, `loadedCameraMotions`, `modelLoadError`, `pendingModelLoadName`]), Z.setState({
+            isLoading: !1, isPlaying: !1, hasMotion: !1, modelLoadError: Kf(e), pendingModelLoadName: null, loadedModel: null, loadedMotions: [], loadedCameraMotions: [], suspiciousMaterials: [], materialVisibilityOverrides: {
+            }, activeCameraMotionFileName: null, trackingBoneName: null
+        })
+    }
+} async function Df(e) {
+    let t = ++ Sf;
+    Pf(`openMotionFiles`), console.debug(`[main] openMotionFiles: start`, {
+        count: e.length, fileNames: e.map(e => e.name), loadGeneration: t
+    });
+    let n = Q.getCurrentMesh();
+    if (console.debug(`[main] openMotionFiles: entry`, {
+        loadGeneration: t, motionLoadGenerationNow: Sf, activeMotionsCount: vf.length, currentLoadedMotionsLength: Z.getState().loadedMotions.length, meshFromController: n, isMeshNull: n === null
+    }), n === null) {
+        console.warn(`[main] openMotionFiles: no model mesh is available`), Z.setState({
+            motionLoadError: df, pendingMotionLoadNames: []
+        });
+        return
+    } let r = new Set(vf.map(e => e.fileName)), i = e.filter(e => r.has(e.name) ? (console.warn(`[main] openMotionFiles: duplicate skipped`, {
+        fileName: e.name
+    }), !1): (r.add(e.name), !0));
+    if (i.length === 0) {
+        console.warn(`[main] openMotionFiles: all files are duplicates, skipping`);
+        return
+    } console.debug(`[main] openMotionFiles: files to load`, {
+        loadGeneration: t, filesToLoadLength: i.length, fileNames: i.map(e => e.name)
+    }), If(`openMotionFiles:start`, [`isMotionLoading`, `motionLoadError`, `pendingMotionLoadNames`]), Z.setState({
+        isMotionLoading: !0, motionLoadError: null, pendingMotionLoadNames: i.map(e => e.name)
+    });
+    let a = [];
+    try {
+        let e = await ed(i, n);
+        if (console.debug(`[main] openMotionFiles: loadVmdsFromFiles complete`, {
+            loadGeneration: t, resultsLength: e.length, fileNames: e.map(e => e.fileName), clipNames: e.map(e => e.clip.name), motionLoadGenerationNow: Sf, isStale: t !== Sf
+        }), t !== Sf) {
+            console.debug(`[main] openMotionFiles: ignored stale result`, {
+                loadGeneration: t, currentGeneration: Sf
+            });
+            for (let t of e) t.dispose();
+            return
+        } a = e, console.debug(`[main] openMotionFiles: addMotions before`, {
+            loadGeneration: t, clipCount: e.length, clipNames: e.map(e => e.clip.name)
+        });
+        let r = await Q.addMotions(e.map(e => e.clip));
+        if (console.debug(`[main] openMotionFiles: addMotions result`, {
+            loadGeneration: t, isRegistered: r, resultsLength: e.length
+        }), !r) throw Error(ff);
+        vf = [...vf, ...e], a = [], Q.setLooping(Z.getState().isLooping);
+        for (let t of e) console.debug(`[main] openMotionFiles: setMotionActive`, {
+            fileName: t.fileName, clipName: t.clip.name
+        }), Q.setMotionActive(t.clip, !0);
+        let o = [...Z.getState().loadedMotions, ...e.map(e => ({
+            fileName: e.fileName, isActive: !0
+        }))];
+        If(`openMotionFiles:success`, [`isMotionLoading`, `hasMotion`, `loadedMotions`, `motionLoadError`, `pendingMotionLoadNames`]), console.debug(`[main] openMotionFiles: next loadedMotions`, {
+            loadGeneration: t, loadedMotionsLength: o.length, loadedMotions: o
+        }), Z.setState({
+            isMotionLoading: !1, hasMotion: !0, loadedMotions: o, motionLoadError: null, pendingMotionLoadNames: []
+        }), (async() => {
+            try {
+                await zf(), await Lf(), Rf()
+            } catch (e) {
+                console.warn(`[main] saveCurrentModelVmds: failed`, e)
+            }
+        })(), console.debug(`[main] openMotionFiles: complete`, {
+            loadGeneration: t, count: e.length, fileNames: e.map(e => e.fileName)
+        })
+    } catch (e) {
+        if (t !== Sf) {
+            console.debug(`[main] openMotionFiles: ignored stale error`, {
+                loadGeneration: t, currentGeneration: Sf
+            });
+            return
+        } console.error(`[main] openMotionFiles: error`, e);
+        for (let e of a) e.dispose();
+        If(`openMotionFiles:error`, [`isMotionLoading`, `motionLoadError`, `pendingMotionLoadNames`]), Z.setState({
+            isMotionLoading: !1, motionLoadError: Kf(e), pendingMotionLoadNames: []
+        })
+    }
+} async function Of(e) {
+    let t = ++ Cf;
+    Pf(`openCameraMotionFiles`), console.debug(`[main] openCameraMotionFiles: start`, {
+        count: e.length, fileNames: e.map(e => e.name), loadGeneration: t
+    });
+    let n = new Set(yf.map(e => e.fileName)), r = e.filter(e => n.has(e.name) ? (console.warn(`[main] openCameraMotionFiles: duplicate skipped`, {
+        fileName: e.name
+    }), !1): (n.add(e.name), !0));
+    if (r.length === 0) {
+        console.warn(`[main] openCameraMotionFiles: all files are duplicates, skipping`);
+        return
+    } If(`openCameraMotionFiles:start`, [`isCameraMotionLoading`, `cameraMotionLoadError`, `pendingCameraMotionLoadNames`]), Z.setState({
+        isCameraMotionLoading: !0, cameraMotionLoadError: null, pendingCameraMotionLoadNames: r.map(e => e.name)
+    });
+    let i = [];
+    try {
+        let e = await id(r);
+        if (t !== Cf) {
+            console.debug(`[main] openCameraMotionFiles: ignored stale result`, {
+                loadGeneration: t, currentGeneration: Cf
+            });
+            for (let t of e) t.dispose();
+            return
+        } if (i = e, !Q.addCameraMotions(e.map(e => e.clip))) throw Error(`Camera VMD could not be registered.`);
+        yf = [...yf, ...e], i = [], Q.setLooping(Z.getState().isLooping);
+        let n = Z.getState().activeCameraMotionFileName, a = yf.find(e => e.fileName === n);
+        Q.setActiveCameraMotion(a ? .clip ? ? null), If(`openCameraMotionFiles:success`, [`isCameraMotionLoading`, `cameraMotionLoadError`, `loadedCameraMotions`, `pendingCameraMotionLoadNames`]), Z.setState({
+            isCameraMotionLoading: !1, cameraMotionLoadError: null, pendingCameraMotionLoadNames: [], loadedCameraMotions: yf.map(e => ({
+                fileName: e.fileName
+            }))
+        }), (async() => {
+            try {
+                await Bf(), await Lf(), Rf()
+            } catch (e) {
+                console.warn(`[main] saveCurrentCameraVmds: failed`, e)
+            }
+        })(), console.debug(`[main] openCameraMotionFiles: complete`, {
+            loadGeneration: t, count: e.length, fileNames: e.map(e => e.fileName)
+        })
+    } catch (e) {
+        if (t !== Cf) {
+            console.debug(`[main] openCameraMotionFiles: ignored stale error`, {
+                loadGeneration: t, currentGeneration: Cf
+            });
+            return
+        } console.error(`[main] openCameraMotionFiles: error`, e);
+        for (let e of i) e.dispose();
+        If(`openCameraMotionFiles:error`, [`isCameraMotionLoading`, `cameraMotionLoadError`, `pendingCameraMotionLoadNames`]), Z.setState({
+            isCameraMotionLoading: !1, cameraMotionLoadError: Kf(e), pendingCameraMotionLoadNames: []
+        })
+    }
+} async function kf(e) {
+    let t = vf.find(t => t.fileName === e);
+    if (t === void 0) {
+        console.warn(`[main] removeMotion: motion was not found`, {
+            fileName: e
+        });
+        return
+    } let n = Z.getState(), r = new Map(n.loadedMotions.map(e => [e.fileName, e.isActive]));
+    await Q.removeMotion(t.clip), t.dispose(), vf = vf.filter(e => e !== t);
+    let i = vf.map(e => ({
+        fileName: e.fileName, isActive: r.get(e.fileName) ? ? !0
+    })), a = i.some(e => e.isActive), o = n.activeCameraMotionFileName !== null, s = n.isPlaying && (a || o);
+    Q.setPlaying(s), Z.setState({
+        loadedMotions: i, hasMotion: i.length > 0, isPlaying: s
+    }), await zf(), await Lf(), console.debug(`[main] removeMotion`, {
+        fileName: e, remainingCount: vf.length
+    })
+} async function Af(e) {
+    let t = yf.find(t => t.fileName === e);
+    if (t === void 0) {
+        console.warn(`[main] removeCameraMotion: motion was not found`, {
+            fileName: e
+        });
+        return
+    } let n = Z.getState();
+    Q.removeCameraMotion(t.clip), t.dispose(), yf = yf.filter(e => e !== t);
+    let r = n.activeCameraMotionFileName === e ? null: n.activeCameraMotionFileName, i = yf.find(e => e.fileName === r);
+    Q.setActiveCameraMotion(i ? .clip ? ? null);
+    let a = n.loadedMotions.some(e => e.isActive), o = n.isPlaying && (a || r !== null);
+    Q.setPlaying(o), Z.setState({
+        loadedCameraMotions: yf.map(e => ({
+            fileName: e.fileName
+        })), activeCameraMotionFileName: r, isPlaying: o
+    }), await Bf(), await Lf(), console.debug(`[main] removeCameraMotion`, {
+        fileName: e, remainingCount: yf.length
+    })
+} function jf(e, t) {
+    let n = Z.getState(), r = n.loadedMotions.map(n => n.fileName === e ? {
+...n, isActive: t
+    }: n), i = n.isPlaying, a = r.filter(e => e.isActive).length, o = n.activeCameraMotionFileName !== null, s = vf.find(t => t.fileName === e), c = (a > 0 || o) && i;
+    if (console.debug(`[main] setMotionActive`, {
+        fileName: e, isActive: t, activeCount: a
+    }), s === void 0) {
+        console.warn(`[main] setMotionActive: motion was not found`, {
+            fileName: e
+        });
+        return
+    } if (Q.setMotionActive(s.clip, t), Z.setState({
+        loadedMotions: r, isPlaying: c
+    }), Lf(), !c) {
+        Q.setPlaying(!1);
+        return
+    } Q.setPlaying(!0)
+} function Mf(e) {
+    let t = Z.getState(), n = e === null ? null: yf.find(t => t.fileName === e);
+    if (e !== null && n === void 0) {
+        console.warn(`[main] setActiveCameraMotion: motion was not found`, {
+            fileName: e
+        });
+        return
+    } Q.setActiveCameraMotion(n ? .clip ? ? null);
+    let r = (t.loadedMotions.some(e => e.isActive) || e !== null) && t.isPlaying;
+    Q.setPlaying(r), Z.setState({
+        activeCameraMotionFileName: e, isPlaying: r
+    }), Lf(), console.debug(`[main] setActiveCameraMotion`, {
+        fileName: e
+    })
+} async function Nf() {
+    let e = bf;
+    if (!Z.getState().settings.isAutoRestoreEnabled) {
+        console.debug(`[main] restoreSessionOnStartup: disabled`);
+        return
+    } console.debug(`[main] restoreSessionOnStartup: start`, {
+        restoreGeneration: e
+    });
+    try {
+        let t = await bd();
+        if (!Ff(e, `loadSession`)) return ;
+        if (t === null || t.modelFiles.length === 0) {
+            console.debug(`[main] restoreSessionOnStartup: no cached session`);
+            return
+        } If(`restoreSessionOnStartup:startLoading`, [`isLoading`, `isMotionLoading`, `isCameraMotionLoading`, `errorMessage`]), Z.setState({
+            isLoading: !0, isMotionLoading: t.modelVmds.length > 0, isCameraMotionLoading: t.cameraVmds.length > 0, errorMessage: null
+        });
+        let n = await Bu(t.modelFiles);
+        if (!Ff(e, `loadPmxFromCachedBlobs`)) {
+            n.dispose();
+            return
+        } _f !== null && _f.dispose(), _f = n, $.setModel(n.model), Q.setModel(n.model), Wf(), Gf(), Z.getState().settings.isDebugModeEnabled && $.dumpMaterialDetails();
+        let {
+            materialVisibilityOverrides: r, suspiciousMaterials: i
+        } = Vf(), a = gu(n.model), o = Hf(a);
+        $.setTrackingBone(o);
+        let s = Q.getCurrentMesh();
+        if (s === null) throw Error(`Restored model does not contain a skinned mesh.`);
+        let c = [], l = new Set(t.activeModelVmdFileNames);
+        if (t.modelVmds.length > 0) {
+            if (c = await td(t.modelVmds, s), !Ff(e, `loadVmdsFromBlobs`)) {
+                for (let e of c) e.dispose();
+                return
+            } vf = c;
+            let n = await Q.setMotions(c.map(e => e.clip));
+            if (!Ff(e, `setMotions`)) return ;
+            if (!n) throw Error(ff)
+        } let u = [], d;
+        if (t.cameraVmds.length > 0) {
+            if (u = await ad(t.cameraVmds), !Ff(e, `loadCameraVmdsFromBlobs`)) {
+                for (let e of u) e.dispose();
+                return
+            } if (yf = u, !Q.setCameraMotions(u.map(e => e.clip))) throw Error(`Camera VMD could not be registered.`);
+            d = u.find(e => e.fileName === t.activeCameraMotionFileName)
+        } Q.setLooping(t.isLooping), Q.setPlaying(!1);
+        for (let e of c) Q.setMotionActive(e.clip, l.has(e.fileName));
+        if (Q.setActiveCameraMotion(d ? .clip ? ? null), !Ff(e, `beforeStoreSetState`)) return ;
+        If(`restoreSessionOnStartup:success`, [`isLoading`, `isMotionLoading`, `isCameraMotionLoading`, `isPlaying`, `isLooping`, `hasMotion`, `loadedModel`, `loadedMotions`, `loadedCameraMotions`, `activeCameraMotionFileName`, `trackingBoneName`, `settings.trackingBoneName`]), Z.setState({
+            isLoading: !1, isMotionLoading: !1, isCameraMotionLoading: !1, isPlaying: !1, isLooping: t.isLooping, hasMotion: c.length > 0, loadedModel: {
+                fileName: n.fileName, object: n.model, availableBoneNames: a
+            }, loadedMotions: c.map(e => ({
+                fileName: e.fileName, isActive: t.activeModelVmdFileNames.includes(e.fileName)
+            })), loadedCameraMotions: u.map(e => ({
+                fileName: e.fileName
+            })), suspiciousMaterials: i, materialVisibilityOverrides: r, activeCameraMotionFileName: u.some(e => e.fileName === t.activeCameraMotionFileName) ? t.activeCameraMotionFileName: null, trackingBoneName: o, settings: {
+...Z.getState().settings, trackingBoneName: o
+            }
+        }), console.debug(`[main] restoreSessionOnStartup: complete`, {
+            restoreGeneration: e, modelFileName: n.fileName, modelVmds: c.length, cameraVmds: u.length
+        })
+    } catch (t) {
+        if (console.error(`[main] restoreSessionOnStartup: error`, t), !Ff(e, `catch`)) return ;
+        Wf(), Gf(), _f !== null && (_f.dispose(), _f = null), $.clearModel(), Q.clearModel(), If(`restoreSessionOnStartup:error`, [`isLoading`, `isMotionLoading`, `isCameraMotionLoading`, `isPlaying`, `hasMotion`, `loadedModel`, `loadedMotions`, `loadedCameraMotions`]), Z.setState({
+            isLoading: !1, isMotionLoading: !1, isCameraMotionLoading: !1, isPlaying: !1, hasMotion: !1, loadedModel: null, loadedMotions: [], loadedCameraMotions: [], suspiciousMaterials: [], materialVisibilityOverrides: {
+            }, activeCameraMotionFileName: null, trackingBoneName: null
+        })
+    }
+} function Pf(e) {
+    bf + = 1, console.debug(`[main] invalidatePendingSessionRestore`, {
+        reason: e, sessionRestoreGeneration: bf
+    })
+} function Ff(e, t) {
+    let n = e === bf;
+    return n || console.debug(`[main] restoreSessionOnStartup: ignored stale restore`, {
+        step: t, restoreGeneration: e, currentGeneration: bf
+    }), n
+} function If(e, t) {
+    console.debug(`[main] store.setState`, {
+        source: e, keys: t
+    })
+} async function Lf() {
+    let e = Z.getState();
+    try {
+        await wd({
+            modelFileNames: e.loadedMotions.filter(e => e.isActive).map(e => e.fileName), cameraFileName: e.activeCameraMotionFileName, isLooping: e.isLooping
+        })
+    } catch (e) {
+        console.warn(`[main] persistActiveSelections: failed`, e)
+    }
+} async function Rf() {
+    try {
+        wf.setStorageUsageText(await Yl())
+    } catch (e) {
+        console.warn(`[main] refreshStorageUsage: failed`, e)
+    }
+} async function zf() {
+    try {
+        await Sd(vf.map(e => ({
+            fileName: e.fileName, blob: e.sourceBlob
+        })))
+    } catch (e) {
+        console.warn(`[main] persistModelMotions: failed`, e)
+    }
+} async function Bf() {
+    try {
+        await Cd(yf.map(e => ({
+            fileName: e.fileName, blob: e.sourceBlob
+        })))
+    } catch (e) {
+        console.warn(`[main] persistCameraMotions: failed`, e)
+    }
+} function Vf() {
+    let e = $.collectSuspiciousMaterials(), t = {
+    };
+    for (let n of e) mf.some(e => e.test(n.name)) && (t[n.name] = !0);
+    return $.applyMaterialOverrides(t), {
+        suspiciousMaterials: e, materialVisibilityOverrides: t
+    }
+} function Hf(e) {
+    let t = Z.getState().settings.trackingBoneName;
+    return t !== null && e.includes(t) ? t: _u(e)
+} async function Uf() {
+    Pf(`clearSessionCache`), console.debug(`[main] clearSessionCache: start`);
+    try {
+        await Td(), Z.reset(), Rf(), console.debug(`[main] clearSessionCache: complete`)
+    } catch (e) {
+        console.error(`[main] clearSessionCache: error`, e), Z.setState({
+            errorMessage: Kf(e)
+        })
+    }
+} function Wf() {
+    console.debug(`[main] clearActiveMotion`, {
+        count: vf.length, fileNames: vf.map(e => e.fileName)
+    });
+    for (let e of vf) e.dispose();
+    vf = [], Q.clearMotion()
+} function Gf() {
+    console.debug(`[main] clearActiveCameraMotion`, {
+        count: yf.length, fileNames: yf.map(e => e.fileName)
+    });
+    for (let e of yf) e.dispose();
+    yf = [], Q.clearCameraMotions()
+} function Kf(e) {
+    return e instanceof Error ? qf(e.message): pf
+} function qf(e) {
+    return / [぀ - ヿ一 - 鿿] / .test(e) ? e: e.includes(`Unknown model file extension`) ? `PMX ファイル形式ではありません。`: / Unknown. * file extension / i.test(e) ? `対応してぁE��ぁE��ァイル形式です。`: / THREE\.MMDLoader / i.test(e) ? `ファイルの解析に失敗しました。ファイル形式を確認してください。`: e.includes(`Corrupted zip`) ? `ZIP ファイルが破損してぁE��か、対応してぁE��ぁE��式です。`: e.includes(`End of data reached`) ? `ファイルチE�Eタの読み込みに失敗しました。ファイルが破損してぁE��可能性があります。`: e.includes(`offset is outside the bounds`) ? `ファイル形式が不正です。PMX/VMD 形式�Eファイルか確認してください。`: e.includes(`Failed to fetch`) || e.includes(`NetworkError`) ? `ファイルの取得に失敗しました。`: e.includes(`FileReader`) ? `ファイルの読み取り中にエラーが発生しました。`: e.includes(`not allowed`) || e.includes(`Permission denied`) ? `アクセスが許可されてぁE��せん。`: `ファイルの読み込みに失敗しました: ${e}`
+} export {
+    Ru as t
+};

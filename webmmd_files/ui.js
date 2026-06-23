@@ -316,6 +316,12 @@ if ("serviceWorker" in navigator) {
       return;
     }
 
+    // 前のモーション状態をクリア（空のファイルリスト）
+    const clearTransfer = new DataTransfer();
+    motionInput.files = clearTransfer.files;
+    motionInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+    // その後、新しいモーションを設定
     setFileInputAndDispatch(motionInput, [selectedMotion]);
     updateStatus(`モーションを読み込みました: ${selectedMotion.name}`);
   };

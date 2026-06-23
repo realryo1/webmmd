@@ -18,14 +18,18 @@ mmd/
 │   └── icon-192.svg
 └── webmmd_files/
     ├── logic.js                  # メインアプリバンドル（Three.js/MMD 本体）
+    ├── handler.js                # UI ハンドラー・初期化コード（logic.js から外部化）
     ├── ui.js                     # assets 管理拡張 UI
     ├── style.css                 # アプリスタイル
     ├── ammo.js                   # Bullet 物理演算（Emscripten WebAssembly）
     ├── jszip.min-oqqPI3B3.js     # JSZip ライブラリ
-    └── zip-loader-BVwbcZYR.js    # ZIP 展開モジュール
+    ├── zip-loader-BVwbcZYR.js    # ZIP 展開モジュール
+    └── handler/                  # ビルドツール（実行時不要）
+        ├── copyhandler.js        # 元コード（参照・再ビルド用）
+        ├── format_js.py          # 圧縮 JS フォーマッター
+        ├── build_handler.py      # handler.js 再生成スクリプト
+        └── fix_handler.py        # 演算子修正スクリプト（build 後に実行）
 ```
-
-> **重要:** `webmmd_files/logic.js` はバンドル成果物のため、直接編集は高リスク。UI拡張は `webmmd_files/ui.js` 側で行う。
 
 ---
 
@@ -36,7 +40,12 @@ mmd/
 ```
 ページロード
   ├─ webmmd_files/logic.js（module）を読み込み
-  │   └─ ビューア本体が #app を再構築
+  │   ├─ ビューア本体（Three.js/MMD）を初期化
+  │   └─ jd, mu, Il, Wl, zu, gu, pu, wd … など内部クラス・関数を export
+  ├─ webmmd_files/handler.js（module）を読み込み
+  │   ├─ logic.js から必要なクラス・関数を import
+  │   ├─ of クラス（UI ハンドラー）を定義
+  │   └─ 初期化コードを実行（State Store / Viewer / イベント接続）
   └─ webmmd_files/ui.js を読み込み
     ├─ Service Worker を登録（./sw.js）
     └─ MutationObserver が検知 → setupIfReady() を呼ぶ
@@ -163,4 +172,5 @@ assets/
 - `webmmd_files/logic.js` はページロード時に `#app` を書き換えるため、`setupIfReady()` は何度呼ばれても冪等になっている（`data-assetsEnhanced="1"` ガード）
 - `MutationObserver` で `#app` の変化を監視して `setupIfReady()` と `enforcePanelOrder()` を再適用している
 - Service Worker は HTTPS または localhost でのみ有効。`file://` では登録できない
-- キャッシュ定義は `sw.js` の `webmmd-cache-v2` / `APP_SHELL` を参照（`logic.js` / `ui.js` / `style.css` を事前キャッシュ）
+- キャッシュ定義は `sw.js` の `webmmd-cache-v3` / `APP_SHELL` を参照（`logic.js` / `handler.js` / `ui.js` / `style.css` を事前キャッシュ）
+- `handler.js` を編集した後は `handler/build_handler.py` → `handler/fix_handler.py` の順で再生成する
