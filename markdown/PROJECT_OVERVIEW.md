@@ -23,7 +23,7 @@ mmd/
     ├── style.css                 # アプリスタイル
     ├── ammo.js                   # Bullet 物理演算（Emscripten WebAssembly）
     ├── jszip.min-oqqPI3B3.js     # JSZip ライブラリ
-    ├── zip-loader-BVwbcZYR.js    # ZIP 展開モジュール
+    ├── zip-loader-BVwbcZYR.js    # ZIP 展開モジュール（Vite __vitePreload スタブを内包）
     └── handler/                  # ビルドツール（実行時不要）
         ├── copyhandler.js        # 元コード（参照・再ビルド用）
         ├── format_js.py          # 圧縮 JS フォーマッター
@@ -63,6 +63,37 @@ mmd/
 | localStorage | `webmmd.assets.pathLabel` | 現在の assets フォルダ表示名 |
 
 DB 名: `webmmd-assets-db` / version: `2`
+
+---
+
+## レンダリング設定（handler.js 独自追加）
+
+ビューア起動時に `handler.js` 内で以下の設定を追加している。`logic.js` は変更していない。
+
+### トーンマッピング
+
+| プロパティ | 値 | 効果 |
+|---|---|---|
+| `renderer.toneMapping` | `4`（ACESFilmicToneMapping） | 水色など高彩度の色を正確に表示、ハイライト白飛びを抑制 |
+| `renderer.toneMappingExposure` | `0.8` | 全体露出を下げてバランス調整 |
+
+Three.js デフォルト（`NoToneMapping=0`）では、リニア→sRGB 変換でシャドウ部が過度に暗くなり、ハイライトが白飛びする問題があった。`ACESFilmicToneMapping` に変更することで両方を解消。
+
+### 影（Shadow Map）
+
+| 設定 | 値 |
+|---|---|
+| `renderer.shadowMap.enabled` | `true` |
+| `renderer.shadowMap.type` | `2`（PCFSoftShadowMap） |
+| 影マップ解像度 | 1024×1024 |
+| シャドウカメラ範囲 | left/right/top/bottom = ±50、near=0.5、far=500 |
+
+**UI トグル**: 設定パネル「表示」欄の「影」チェックボックスで制御。
+
+- ON: メイン DirectionalLight の `castShadow = true` ＋ モデル全メッシュの `castShadow` / `receiveShadow = true`
+- OFF: `castShadow = false`（Shadow Map レンダリングが完全にスキップされるため負荷ゼロ）
+- モデルロード後に現在の設定を自動適用
+- 設定は localStorage に永続化（キー: `isShadowEnabled`）
 
 ---
 
@@ -172,5 +203,5 @@ assets/
 - `webmmd_files/logic.js` はページロード時に `#app` を書き換えるため、`setupIfReady()` は何度呼ばれても冪等になっている（`data-assetsEnhanced="1"` ガード）
 - `MutationObserver` で `#app` の変化を監視して `setupIfReady()` と `enforcePanelOrder()` を再適用している
 - Service Worker は HTTPS または localhost でのみ有効。`file://` では登録できない
-- キャッシュ定義は `sw.js` の `webmmd-cache-v8` / `APP_SHELL` を参照（`logic.js` / `handler.js` / `ui.js` / `style.css` を事前キャッシュ）
-- `handler.js` を編集した後は `handler/build_handler.py` → `handler/fix_handler.py` の順で再生成する
+- キャッシュ定義は `sw.js` の `webmmd-cache-v12` / `APP_SHELL` を参照（`logic.js` / `handler.js` / `ui.js` / `style.css` / `zip-loader-BVwbcZYR.js` 等を事前キャッシュ）
+- `handler.js` は直接編集して機能追加している。`handler/build_handler.py` → `handler/fix_handler.py` は元々の抽出フロー用であり、現在は再抽出せず `handler.js` を直接保守する

@@ -1,6 +1,6 @@
 import {jd, mu, Il, Wl, zu, gu, pu, wd, xd, bd, Bu, td, ad, ed, id, Sd, Cd, Td, Ul, Hl, Vl, Bl, Yl, _u, Ru} from './logic.js';
 
-var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は未選択です。`, Kd = `なし`, qd = `PMX 本体とチE��スチャ画像を全て選択、また�E ZIP めE1 つ選択してください。`, Jd = `全画面表示`, Yd = `全画面を解除`, Xd = `リセチE��`, Zd = `視点リセチE��`, Qd = `
+var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は未選択です。`, Kd = `なし`, qd = `PMX 本体とテクスチャ画像を全て選択、またはzipファイルを１つ選択してください。`, Jd = `全画面表示`, Yd = `全画面を解除`, Xd = `リセット`, Zd = `視点リセット`, Qd = `
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M8 3H3v5h2V5h3V3Zm8 0v2h3v3h2V3h-5ZM5 16H3v5h5v-2H5v-3Zm14 3h-3v2h5v-5h-2v3Z" />
   </svg>
@@ -887,5 +887,5 @@ async function Tf() {
 } function Kf(e) {
     return e instanceof Error ? qf(e.message): pf
 } function qf(e) {
-    return / [぀ - ヿ一 - 鿿] / .test(e) ? e: e.includes(`Unknown model file extension`) ? `PMXファイル形式ではありません。`:/Unknown. * file extension/i.test(e) ? `対応していないファイル形式です。`:/THREE\.MMDLoader/i.test(e) ? `ファイルの解析に失敗しました。ファイル形式を確認してください。`: e.includes(`Corrupted zip`) ? `ZIP ファイルが破損してぁE��か、対応してぁE��ぁE��式です。`: e.includes(`End of data reached`) ? `ファイルチE�Eタの読み込みに失敗しました。ファイルが破損してぁE��可能性があります。`: e.includes(`offset is outside the bounds`) ? `ファイル形式が不正です。PMX/VMD 形式ファイルか確認してください。`: e.includes(`Failed to fetch`) || e.includes(`NetworkError`) ? `ファイルの取得に失敗しました。`: e.includes(`FileReader`) ? `ファイルの読み取り中にエラーが発生しました。`: e.includes(`not allowed`) || e.includes(`Permission denied`) ? `アクセスが許可されていません。`: `ファイルの読み込みに失敗しました: ${e}`
+    return / [぀ - ヿ一 - 鿿] / .test(e) ? e: e.includes(`Unknown model file extension`) ? `PMXファイル形式ではありません。`:/Unknown. * file extension/i.test(e) ? `対応していないファイル形式です。`:/THREE\.MMDLoader/i.test(e) ? `ファイルの解析に失敗しました。ファイル形式を確認してください。`: e.includes(`Corrupted zip`) ? `ZIP ファイルが破損しているか、対応していない形式です。`: e.includes(`End of data reached`) ? `ファイルの読み込みに失敗しました。ファイルが破損している可能性があります。`: e.includes(`offset is outside the bounds`) ? `ファイル形式が不正です。PMX/VMD 形式ファイルか確認してください。`: e.includes(`Failed to fetch`) || e.includes(`NetworkError`) ? `ファイルの取得に失敗しました。`: e.includes(`FileReader`) ? `ファイルの読み取り中にエラーが発生しました。`: e.includes(`not allowed`) || e.includes(`Permission denied`) ? `アクセスが許可されていません。`: `ファイルの読み込みに失敗しました: ${e}`
 }

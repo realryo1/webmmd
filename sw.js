@@ -1,4 +1,4 @@
-const CACHE_NAME = "webmmd-cache-v11";
+const CACHE_NAME = "webmmd-cache-v12";
 
 const APP_SHELL = [
   "./",
@@ -10,8 +10,7 @@ const APP_SHELL = [
   "./webmmd_files/ui.js",
   "./webmmd_files/style.css",
   "./webmmd_files/jszip.min-oqqPI3B3.js",
-  "./webmmd_files/zip-loader-BVwbcZYR.js",
-  "./webmmd_files/index-4WVB8kZJ.js"
+  "./webmmd_files/zip-loader.js"
 ];
 
 self.addEventListener("install", (event) => {
