@@ -1,5 +1,14 @@
 # Implementation Status
 
+## 2026-06-23 (追加)
+
+| Item | Status | Details |
+| --- | --- | --- |
+| ZIP モデル読み込み修正 | Completed | `zip-loader-BVwbcZYR.js` が依存する `./index-4WVB8kZJ.js`（Vite __vitePreload スタブ）が欠落していたため ZIP 解凍が失敗していた。スタブファイルを `webmmd_files/index-4WVB8kZJ.js` として作成（`export const t = (fn, _deps) => fn()`）。ZIP内のPMXはZip-loaderが全エントリを小文字化した後 `Uu()` が `.pmx` 末尾一致で発見する既存ロジックで対応済み。 |
+| SW キャッシュ更新 | Completed | `sw.js` のキャッシュ名を `webmmd-cache-v9` に更新し `index-4WVB8kZJ.js` をキャッシュリストへ追加。 |
+
+---
+
 ## 2026-06-23
 
 | Item | Status | Details |
