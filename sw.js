@@ -1,17 +1,33 @@
-const CACHE_NAME = "webmmd-cache-v12";
+const CACHE_NAME = "webmmd-cache-v14";
 
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./webmmd_files/ammo.js",
-  "./webmmd_files/logic.js",
+  "./webmmd_files/clean_logic.js",
   "./webmmd_files/handler.js",
   "./webmmd_files/ui.js",
   "./webmmd_files/style.css",
   "./webmmd_files/jszip.min-oqqPI3B3.js",
-  "./webmmd_files/zip-loader.js"
+  "./webmmd_files/zip-loader.js",
+  "./webmmd_files/three.module.js",
+  "./webmmd_files/NURBSCurve.js",
+  "./webmmd_files/NURBSUtils.js",
+  "./webmmd_files/FBXLoader.js",
+  "./webmmd_files/fflate.module.js",
+  "./webmmd_files/xr.js",
+  "./webmmd_files/quest2_Controller.fbx",
+  "./webmmd_files/OrbitControls.js",
+  "./webmmd_files/MMDLoader.js",
+  "./webmmd_files/MMDAnimationHelper.js",
+  "./webmmd_files/CCDIKSolver.js",
+  "./webmmd_files/MMDPhysics.js",
+  "./webmmd_files/TGALoader.js",
+  "./webmmd_files/mmdparser.module.js",
+  "./webmmd_files/MMDToonShader.js"
 ];
+
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

@@ -1,4 +1,5 @@
-import {jd, mu, Il, Wl, zu, gu, pu, wd, xd, bd, Bu, td, ad, ed, id, Sd, Cd, Td, Ul, Hl, Vl, Bl, Yl, _u, Ru} from './logic.js';
+import {jd, mu, Il, Wl, zu, gu, pu, wd, xd, bd, Bu, td, ad, ed, id, Sd, Cd, Td, Ul, Hl, Vl, Bl, Yl, _u} from './clean_logic.js';
+import { initXR, attachXRSessionListeners } from './xr.js';
 
 var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は未選択です。`, Kd = `なし`, qd = `PMX 本体とテクスチャ画像を全て選択、またはzipファイルを１つ選択してください。`, Jd = `全画面表示`, Yd = `全画面を解除`, Xd = `リセット`, Zd = `視点リセット`, Qd = `
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -453,6 +454,19 @@ var _f = null, vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = new of(hf,
         Tf()
     }
 }), $ = new pu(wf.getViewerContainer());
+
+// Initialize WebXR VR Mode
+const vrButton = document.getElementById('overlay-vr-button');
+if (vrButton) {
+    initXR({
+        renderer: $.renderer,
+        scene: $.scene,
+        getCamera: () => $.getCamera(),
+        vrButton: vrButton,
+        viewer: $
+    });
+    attachXRSessionListeners($.renderer);
+}
 // ACESFilmicToneMapping(4): 水色などの彩度を保ちつつ白飛びを抑制
 $.renderer.toneMapping = 4;
 $.renderer.toneMappingExposure = 0.8;

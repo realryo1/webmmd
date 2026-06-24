@@ -456,6 +456,13 @@ select {
     opacity: .55
 }
 
+.overlay-button--active {
+    color: #8fd8ff;
+    background: #1a3a5c99;
+    border-color: #8fd8ff88;
+    box-shadow: 0 0 8px #8fd8ff55
+}
+
 .overlay-button svg {
     fill: currentColor;
     pointer-events: none;
