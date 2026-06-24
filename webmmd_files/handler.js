@@ -388,9 +388,12 @@ var _f = null, vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = new of(hf,
     }, onAutoRestoreChanged: e => {
         Z.setState({
             settings: {
-...Z.getState().settings, isAutoRestoreEnabled: e
+                ...Z.getState().settings, isAutoRestoreEnabled: e
             }
-        })
+        });
+        if (!e) {
+            Td().catch(err => console.warn('[main] clearSessionCache on disable failed', err));
+        }
     }, onScreenAwakeEnabledChanged: e => {
         Z.setState({
             settings: {
@@ -521,7 +524,9 @@ Q.setCamera($.getCamera()), $.setGravityVectorProvider({
     } catch(err) {
         console.warn('[settings] save failed', err);
     }
-}), Ul(e => {
+});
+wf.render(Z.getState());
+Ul(e => {
     Z.setState({
         isFullscreen: e
     })
@@ -776,6 +781,16 @@ async function Tf() {
     let e = bf;
     if (!Z.getState().settings.isAutoRestoreEnabled) {
         console.debug(`[main] restoreSessionOnStartup: disabled`);
+        Z.setState({
+            isLoading: false,
+            isMotionLoading: false,
+            isCameraMotionLoading: false
+        });
+        try {
+            await Td();
+        } catch (err) {
+            console.warn('[main] clearSessionCache on startup failed', err);
+        }
         return
     } console.debug(`[main] restoreSessionOnStartup: start`, {
         restoreGeneration: e

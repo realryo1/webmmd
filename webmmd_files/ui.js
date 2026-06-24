@@ -812,6 +812,43 @@ if ("serviceWorker" in navigator) {
       });
     }
 
+    const clearSWButton = document.querySelector(".clear-service-worker-button");
+    if (clearSWButton && clearSWButton.dataset.swClearHooked !== "1") {
+      clearSWButton.dataset.swClearHooked = "1";
+      clearSWButton.addEventListener("click", async () => {
+        if (!window.confirm("アプリのキャッシュを強制更新して再起動しますか？\n（読み込んだモデルやモーションのキャッシュは削除されません）")) {
+          return;
+        }
+        
+        updateStatus("キャッシュを強制更新中...");
+        
+        // CacheStorage をすべて削除
+        if ('caches' in window) {
+          try {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(key => caches.delete(key)));
+            console.debug('[ui] CacheStorage cleared');
+          } catch (e) {
+            console.warn('[ui] CacheStorage clear failed', e);
+          }
+        }
+        
+        // サービスワーカーの登録を解除
+        if ('serviceWorker' in navigator) {
+          try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map(reg => reg.unregister()));
+            console.debug('[ui] ServiceWorker unregistered');
+          } catch (e) {
+            console.warn('[ui] ServiceWorker unregister failed', e);
+          }
+        }
+        
+        // ページを強制リロード
+        window.location.reload(true);
+      });
+    }
+
     const loadedModelNameNode = document.querySelector(".loaded-model-name");
     if (loadedModelNameNode instanceof HTMLElement && loadedModelNameNode.dataset.assetsSyncHooked !== "1") {
       loadedModelNameNode.dataset.assetsSyncHooked = "1";
