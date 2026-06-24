@@ -113,15 +113,25 @@ export function initXR({ renderer, scene, getCamera, vrButton, viewer }) {
 // VR セッション制御
 // -------------------------------------------------------
 
+let _isRequestingSession = false;
+
 async function _onVrButtonClick() {
-  if (!_renderer) return;
+  if (!_renderer || _isRequestingSession) return;
 
   const session = _renderer.xr.getSession();
   if (session) {
     // セッション中 → 終了
-    try { await session.end(); } catch (e) { console.warn('[xr] session.end failed', e); }
+    _isRequestingSession = true;
+    try {
+      await session.end();
+    } catch (e) {
+      console.warn('[xr] session.end failed', e);
+    } finally {
+      _isRequestingSession = false;
+    }
   } else {
     // セッション開始
+    _isRequestingSession = true;
     try {
       const newSession = await navigator.xr.requestSession('immersive-vr', {
         optionalFeatures: ['local-floor', 'bounded-floor'],
@@ -129,6 +139,8 @@ async function _onVrButtonClick() {
       await _renderer.xr.setSession(newSession);
     } catch (e) {
       console.warn('[xr] requestSession failed', e);
+    } finally {
+      _isRequestingSession = false;
     }
   }
 }
