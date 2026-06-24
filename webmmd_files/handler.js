@@ -295,6 +295,36 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
                 transformRow.append(field);
             });
             row.append(transformRow);
+            
+            // 影ON/OFFのチェックボックス
+            const shadowRow = document.createElement("div");
+            shadowRow.style.marginTop = "0.4em";
+            shadowRow.style.display = "flex";
+            shadowRow.style.alignItems = "center";
+            
+            const shadowLabel = document.createElement("label");
+            shadowLabel.className = "checkbox-field";
+            shadowLabel.style.display = "flex";
+            shadowLabel.style.alignItems = "center";
+            shadowLabel.style.gap = "0.3em";
+            shadowLabel.style.fontSize = "0.9em";
+            shadowLabel.style.cursor = "pointer";
+            
+            const shadowCheckbox = document.createElement("input");
+            shadowCheckbox.type = "checkbox";
+            shadowCheckbox.checked = m.isShadowEnabled !== false;
+            shadowCheckbox.addEventListener("change", () => {
+                this.handlers.onModelShadowChanged?.(m.id, shadowCheckbox.checked);
+            });
+            
+            const shadowText = document.createElement("span");
+            shadowText.textContent = "影を描画";
+            shadowText.style.color = "#7b8ba4";
+            
+            shadowLabel.append(shadowCheckbox, shadowText);
+            shadowRow.append(shadowLabel);
+            row.append(shadowRow);
+
             this.deployedModelsList.append(row);
         }
     } renderSavedScenes(e) {
@@ -434,6 +464,7 @@ try {
     const savedSettings = localStorage.getItem('webmmd-settings');
     if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
+        parsed.isShadowEnabled = true; // 過去のキャッシュで影がOFFになっていた問題を強制解決する
         Z.setState({ settings: parsed });
     }
     const savedScenesStr = localStorage.getItem('webmmd-saved-scenes');
@@ -528,6 +559,19 @@ var loadedModels = [], vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = ne
             return m;
         });
         Z.setState({ models: nextModels });
+    }, onModelShadowChanged: (id, enabled) => {
+        const nextModels = Z.getState().models.map(m => {
+            if (m.id === id) {
+                const targetModel = loadedModels.find(t => t.model.uuid === id);
+                if (targetModel) {
+                    targetModel.isShadowEnabled = enabled;
+                }
+                return { ...m, isShadowEnabled: enabled };
+            }
+            return m;
+        });
+        Z.setState({ models: nextModels });
+        applyShadowEnabled(Z.getState().settings.isShadowEnabled === true);
     }, onModelRemove: id => {
         const targetIndex = loadedModels.findIndex(m => m.model.uuid === id);
         if (targetIndex !== -1) {
@@ -580,7 +624,8 @@ var loadedModels = [], vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = ne
                 return {
                     fileName: m.originalFileName || m.fileName,
                     position: [m.position.x, m.position.y, m.position.z],
-                    motions: (targetModel?.loadedMotions || []).map(mo => mo.fileName)
+                    motions: (targetModel?.loadedMotions || []).map(mo => mo.fileName),
+                    isShadowEnabled: m.isShadowEnabled !== false
                 };
             }),
             cameraMotion: Z.getState().activeCameraMotionFileName
@@ -813,17 +858,39 @@ $.renderer.toneMappingExposure = 0.8;
 // Shadow map setup (PCFSoftShadowMap=2)
 $.renderer.shadowMap.enabled = true;
 $.renderer.shadowMap.type = 2;
+$.scene.traverse(function(obj) {
+    if (obj.isDirectionalLight) {
+        obj.shadow.mapSize.width = 1024;
+        obj.shadow.mapSize.height = 1024;
+        obj.shadow.camera.near = 0.5;
+        obj.shadow.camera.far = 500;
+        obj.shadow.camera.left = -50;
+        obj.shadow.camera.right = 50;
+        obj.shadow.camera.top = 50;
+        obj.shadow.camera.bottom = -50;
+        obj.shadow.bias = -0.001;
+        obj.castShadow = false; // 初期状態OFF
+    }
+});
 function applyShadowEnabled(enabled) {
+    console.log("[ShadowDebug] applyShadowEnabled called with:", enabled);
     $.scene.traverse(function(obj) {
-        if (obj.isDirectionalLight) obj.castShadow = enabled;
+        if (obj.isDirectionalLight) {
+            console.log("[ShadowDebug] DirectionalLight castShadow before:", obj.castShadow, "after:", enabled);
+            obj.castShadow = enabled;
+        }
     });
-    $.models.forEach(function(model) {
-        model.traverse(function(obj) {
+    console.log("[ShadowDebug] loadedModels count:", loadedModels.length);
+    loadedModels.forEach(function(m) {
+        const modelShadow = enabled && (m.isShadowEnabled !== false);
+        console.log("[ShadowDebug] Model:", m.fileName, "modelShadow:", modelShadow, "isShadowEnabled:", m.isShadowEnabled);
+        m.model.traverse(function(obj) {
             if (obj.isMesh || obj.isSkinnedMesh) {
-                obj.castShadow = enabled;
-                obj.receiveShadow = enabled;
+                console.log("[ShadowDebug] Mesh:", obj.name, "castShadow before:", obj.castShadow, "after:", modelShadow);
+                obj.castShadow = modelShadow;
+                obj.receiveShadow = modelShadow;
                 const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-                mats.forEach(function(m) { if (m) m.needsUpdate = true; });
+                mats.forEach(function(mat) { if (mat) mat.needsUpdate = true; });
             }
         });
     });
@@ -871,6 +938,7 @@ async function Tf() {
             return
         }
         
+        n.isShadowEnabled = true;
         const currentModels = Z.getState().models.map(m => ({ ...m, isActive: false }));
         
         loadedModels.push(n);
@@ -895,7 +963,8 @@ async function Tf() {
             originalFileName: n.originalFileName,
             isActive: true,
             position: { x: 0, y: 0, z: 0 },
-            rotation: { x: 0, y: 0, z: 0 }
+            rotation: { x: 0, y: 0, z: 0 },
+            isShadowEnabled: true
         };
         const nextModels = [...currentModels, newModelObj];
         n.loadedMotions = [];
@@ -1180,6 +1249,7 @@ async function loadSceneFromYaml(yamlStr) {
         }
         
         const n = await zu(modelFiles);
+        n.isShadowEnabled = modelDef.isShadowEnabled !== false;
         
         if (modelDef.position) {
             n.model.position.set(modelDef.position[0], modelDef.position[1], modelDef.position[2]);
@@ -1235,7 +1305,8 @@ async function loadSceneFromYaml(yamlStr) {
         originalFileName: m.originalFileName,
         isActive: idx === loadedModels.length - 1,
         position: { x: m.model.position.x, y: m.model.position.y, z: m.model.position.z },
-        rotation: { x: m.model.rotation.x, y: m.model.rotation.y, z: m.model.rotation.z }
+        rotation: { x: m.model.rotation.x, y: m.model.rotation.y, z: m.model.rotation.z },
+        isShadowEnabled: m.isShadowEnabled !== false
     }));
     
     if (sceneData.cameraMotion) {

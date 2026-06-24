@@ -84,7 +84,7 @@ export class jd {
         isAutoRestoreEnabled: true,
         isScreenAwakeEnabled: false,
         isDebugModeEnabled: false,
-        isShadowEnabled: false,
+        isShadowEnabled: true,
         isPhysicsSensorEnabled: false,
         gravityMagnitude: 9.8,
         physicsSensorImpulseSensitivity: 1.0,

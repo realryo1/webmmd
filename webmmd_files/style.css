@@ -558,12 +558,16 @@ select {
 
 @media (width<=760px) {
     .app-shell {
-        grid-template-rows: auto minmax(360px, 1fr);
+        grid-template-rows: 1fr auto;
         grid-template-columns: 1fr
     }
 
     .sidebar {
         border-bottom: 1px solid #2c323a;
         border-right: 0
+    }
+
+    .viewer:not(:fullscreen) {
+        height: 40vh;
     }
 }
