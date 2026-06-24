@@ -11,6 +11,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml">
   <script src="./webmmd_files/ammo.js"></script>
+  <script src="./webmmd_files/js-yaml.min.js"></script>
   <script type="module" src="./webmmd_files/handler.js"></script>
   <link rel="stylesheet" crossorigin="" href="./webmmd_files/style.css">
 </head>
@@ -33,6 +34,7 @@
           <input class="camera-motion-input" type="file" multiple />
           <span class="pending-load pending-camera-motion-load" hidden></span>
           <span class="file-error file-error--camera" hidden></span>
+          <input class="scene-input" type="file" accept=".yml,.yaml" hidden />
         </div>
         <section class="panel">
           <div class="field" id="assets-controls">
@@ -40,6 +42,12 @@
             <p id="assets-path-display" class="motion-empty" style="margin:0">現在のアセットパス：未設定</p>
             <button id="assets-open-button" type="button" class="action-button">assets フォルダを設定</button>
             <button id="assets-rescan-button" type="button" class="action-button">再スキャン</button>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="field" id="deployed-models-wrap">
+            <h3>配置済みモデル</h3>
+            <div id="deployed-models-list" class="deployed-models-list"></div>
           </div>
         </section>
         <section class="panel">
@@ -74,6 +82,16 @@
         <section class="panel" id="sound-panel">
           <h3>サウンド</h3>
           <p id="sound-status" class="motion-empty">モーションを選択すると音声ファイルを検索します。</p>
+        </section>
+        <section class="panel" id="scene-panel">
+          <h3>シーン管理 (.yml)</h3>
+          <div class="scene-actions" style="display: flex; gap: 0.5em; margin-bottom: 0.5em;">
+            <button id="scene-save-button" class="action-button" type="button">現在のシーンを保存</button>
+            <button id="scene-load-button" class="action-button" type="button">シーンを読み込む</button>
+          </div>
+          <div id="saved-scenes-list" class="scene-list">
+            <p class="motion-empty" style="margin:0">保存されたシーンはありません。</p>
+          </div>
         </section>
         <section class="panel material-override-panel">
           <span class="debug-material-title">透明マテリアル制御</span>

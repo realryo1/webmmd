@@ -1045,11 +1045,8 @@ export class Il {
       resetPhysicsOnLoop: true
     });
     this.physicsSensor = new Nl();
+    this.modelStates = new Map(); // key: mesh (SkinnedMesh), value: { mesh, currentActions, currentClips, modelWeightTransitions, isRegistered }
     this.currentMesh = null;
-    this.currentAction = null;
-    this.currentActions = new Map();
-    this.currentClips = [];
-    this.modelWeightTransitions = new Map();
     
     this.currentCamera = null;
     this.cameraActions = new Map();
@@ -1059,50 +1056,83 @@ export class Il {
     
     this.hasResetInactiveCamera = true;
     this.isCameraRegistered = false;
-    this.isMeshRegistered = false;
     this.isPlaying = false;
     this.isLooping = false;
     this.isLoadingPaused = false;
     this.lastAppliedGravity = null;
     
     this.playbackFinishedCallback = null;
-    this.modelMixerListener = null;
+    this.modelMixerListeners = new Map(); // mesh -> listener
     this.cameraMixerListener = null;
     
-    this.physicsOnlyRegistrationPromise = null;
-    this.physicsOnlyRegistrationMesh = null;
+    this.physicsOnlyRegistrationPromises = new Map(); // mesh -> promise
     this.isDebugModeEnabled = false;
   }
 
-  setModel(group) {
-    this.removeCurrentMesh();
-    this.resetLastAppliedGravity();
-    this.currentMesh = getSkinnedMesh(group);
-    this.currentAction = null;
-    this.currentActions.clear();
-    this.currentClips = [];
-    this.modelWeightTransitions.clear();
-    this.isPlaying = false;
-
-    if (this.currentMesh === null) {
-      console.warn('[animation] setModel: SkinnedMesh was not found', group);
-      return;
+  addModel(group) {
+    const mesh = getSkinnedMesh(group);
+    if (mesh === null) {
+      console.warn('[animation] addModel: SkinnedMesh was not found', group);
+      return null;
     }
-    this.registerPhysicsOnly();
+    this.currentMesh = mesh;
+
+    if (!this.modelStates.has(mesh)) {
+      this.modelStates.set(mesh, {
+        mesh: mesh,
+        currentActions: new Map(),
+        currentClips: [],
+        modelWeightTransitions: new Map(),
+        isRegistered: false
+      });
+    }
+
+    this.registerPhysicsOnlyForMesh(mesh);
+    return mesh;
+  }
+
+  removeModel(group) {
+    const mesh = getSkinnedMesh(group);
+    if (mesh === null) return;
+
+    this.removeRegisteredMesh(mesh);
+    this.modelStates.delete(mesh);
+
+    if (this.currentMesh === mesh) {
+      this.currentMesh = this.modelStates.size > 0 ? this.modelStates.keys().next().value : null;
+    }
+  }
+
+  setModel(group) {
+    this.clearModel();
+    this.addModel(group);
   }
 
   clearModel() {
     this.clearMotion();
-    this.removeCurrentMesh();
-    this.resetLastAppliedGravity();
-    this.currentAction = null;
-    this.currentActions.clear();
-    this.currentClips = [];
+    for (const mesh of this.modelStates.keys()) {
+      this.removeRegisteredMesh(mesh);
+    }
+    this.modelStates.clear();
+    this.currentMesh = null;
     this.isPlaying = false;
   }
 
   getCurrentMesh() {
     return this.currentMesh;
+  }
+
+  getCurrentActions(mesh = this.currentMesh) {
+    if (!mesh) return new Map();
+    const state = this.modelStates.get(mesh);
+    return state ? state.currentActions : new Map();
+  }
+
+
+  setCurrentMesh(mesh) {
+    if (this.modelStates.has(mesh)) {
+      this.currentMesh = mesh;
+    }
   }
 
   setCamera(camera) {
@@ -1130,47 +1160,49 @@ export class Il {
       console.warn('[animation] setMotions: no SkinnedMesh is available');
       return false;
     }
+    const state = this.modelStates.get(this.currentMesh);
+    if (!state) return false;
 
-    const weightSnap = this.createWeightSnapshot(this.currentActions);
-    const transSnap = this.createTransitionSnapshot(this.modelWeightTransitions);
+    const weightSnap = this.createWeightSnapshot(state.currentActions);
+    const transSnap = this.createTransitionSnapshot(state.modelWeightTransitions);
 
-    if (!this.isMeshRegistered) {
-      await this.registerPhysicsOnly();
+    if (!state.isRegistered) {
+      await this.registerPhysicsOnlyForMesh(this.currentMesh);
     }
 
-    if (!this.isMeshRegistered) {
+    if (!state.isRegistered) {
       this.helper.add(this.currentMesh, { animation: [], physics: false });
-      this.isMeshRegistered = true;
+      state.isRegistered = true;
       this.resetLastAppliedGravity();
     }
 
-    const mixer = this.ensureModelMixer();
+    const mixer = this.ensureModelMixerForMesh(this.currentMesh);
     if (mixer === null) return false;
 
-    this.registerModelMixerFinishedListener();
+    this.registerModelMixerFinishedListenerForMesh(this.currentMesh);
 
-    const currentKeys = new Set(this.currentActions.keys());
+    const currentKeys = new Set(state.currentActions.keys());
     const newKeys = new Set(clips);
     for (const c of currentKeys) {
       if (!newKeys.has(c)) {
-        const action = this.currentActions.get(c);
+        const action = state.currentActions.get(c);
         if (action) {
           action.stop();
           mixer.uncacheAction(c);
         }
-        this.currentActions.delete(c);
-        this.modelWeightTransitions.delete(c);
+        state.currentActions.delete(c);
+        state.modelWeightTransitions.delete(c);
       }
     }
 
-    this.currentClips = clips;
+    state.currentClips = clips;
     for (const clip of clips) {
-      let action = this.currentActions.get(clip);
+      let action = state.currentActions.get(clip);
       if (action !== undefined) {
         const savedWeight = weightSnap.get(clip.name);
         if (savedWeight !== undefined) action.weight = savedWeight;
         const savedTrans = transSnap.get(clip.name);
-        if (savedTrans !== undefined) this.modelWeightTransitions.set(clip, savedTrans);
+        if (savedTrans !== undefined) state.modelWeightTransitions.set(clip, savedTrans);
         continue;
       }
 
@@ -1183,12 +1215,11 @@ export class Il {
       if (savedWeight !== undefined) {
         action.weight = savedWeight;
         const savedTrans = transSnap.get(clip.name);
-        if (savedTrans !== undefined) this.modelWeightTransitions.set(clip, savedTrans);
+        if (savedTrans !== undefined) state.modelWeightTransitions.set(clip, savedTrans);
       }
-      this.currentActions.set(clip, action);
+      state.currentActions.set(clip, action);
     }
 
-    this.currentAction = this.currentActions.values().next().value ?? null;
     this.syncHelperDuration();
     this.applyLooping();
     this.setPlaying(this.isPlaying);
@@ -1196,10 +1227,13 @@ export class Il {
   }
 
   setMotionActive(clip, active) {
-    const action = this.currentActions.get(clip);
+    if (this.currentMesh === null) return;
+    const state = this.modelStates.get(this.currentMesh);
+    if (!state) return;
+    const action = state.currentActions.get(clip);
     if (action === undefined) return;
     const target = active ? 1.0 : 0.0;
-    this.modelWeightTransitions.set(clip, {
+    state.modelWeightTransitions.set(clip, {
       startWeight: action.weight,
       targetWeight: target,
       elapsed: 0,
@@ -1211,26 +1245,32 @@ export class Il {
   }
 
   async addMotions(clips) {
-    const snap = this.createActionStateSnapshot(this.currentActions);
-    const combined = [...this.currentClips, ...clips];
+    if (this.currentMesh === null) return false;
+    const state = this.modelStates.get(this.currentMesh);
+    if (!state) return false;
+    const snap = this.createActionStateSnapshot(state.currentActions);
+    const combined = [...state.currentClips, ...clips];
     const registered = await this.setMotions(combined);
     if (registered) {
-      this.restoreActionStateSnapshot(this.currentActions, snap);
+      this.restoreActionStateSnapshot(state.currentActions, snap);
     }
     return registered;
   }
 
   async removeMotion(clip) {
-    const snap = this.createActionStateSnapshot(this.currentActions);
+    if (this.currentMesh === null) return;
+    const state = this.modelStates.get(this.currentMesh);
+    if (!state) return;
+    const snap = this.createActionStateSnapshot(state.currentActions);
     snap.delete(clip.name);
-    const filtered = this.currentClips.filter(c => c !== clip);
+    const filtered = state.currentClips.filter(c => c !== clip);
     if (filtered.length === 0) {
       this.clearMotion();
       return;
     }
     const registered = await this.setMotions(filtered);
     if (registered) {
-      this.restoreActionStateSnapshot(this.currentActions, snap);
+      this.restoreActionStateSnapshot(state.currentActions, snap);
     }
   }
 
@@ -1387,17 +1427,19 @@ export class Il {
   }
 
   clearMotion() {
+    if (this.currentMesh === null) return;
+    const state = this.modelStates.get(this.currentMesh);
+    if (!state) return;
     const mixer = this.getModelMixer();
     if (mixer !== null) {
-      for (const [clip, action] of this.currentActions) {
+      for (const [clip, action] of state.currentActions) {
         action.stop();
         mixer.uncacheAction(clip);
       }
     }
-    this.currentAction = null;
-    this.currentActions.clear();
-    this.currentClips = [];
-    this.modelWeightTransitions.clear();
+    state.currentActions.clear();
+    state.currentClips = [];
+    state.modelWeightTransitions.clear();
     this.isPlaying = false;
   }
 
@@ -1418,23 +1460,37 @@ export class Il {
   }
 
   update(delta) {
-    if (!this.isMeshRegistered && !this.isCameraRegistered) return;
+    let hasRegistered = this.isCameraRegistered;
+    for (const state of this.modelStates.values()) {
+      if (state.isRegistered) hasRegistered = true;
+    }
+    if (!hasRegistered) return;
     this.applyWeightTransitions(delta);
     this.applyPhysicsSensor();
     this.helper.update(delta);
   }
 
   removeCurrentMesh() {
-    this.removeRegisteredMeshOnly();
-    this.currentMesh = null;
+    if (this.currentMesh !== null) {
+      this.removeRegisteredMesh(this.currentMesh);
+      this.modelStates.delete(this.currentMesh);
+      this.currentMesh = this.modelStates.size > 0 ? this.modelStates.keys().next().value : null;
+    }
+  }
+
+  removeRegisteredMesh(mesh) {
+    const state = this.modelStates.get(mesh);
+    if (state && state.isRegistered) {
+      this.removeModelMixerFinishedListenerForMesh(mesh);
+      this.helper.remove(mesh);
+      state.isRegistered = false;
+      this.resetLastAppliedGravity();
+    }
   }
 
   removeRegisteredMeshOnly() {
-    if (this.currentMesh !== null && this.isMeshRegistered) {
-      this.removeModelMixerFinishedListener();
-      this.helper.remove(this.currentMesh);
-      this.isMeshRegistered = false;
-      this.resetLastAppliedGravity();
+    if (this.currentMesh !== null) {
+      this.removeRegisteredMesh(this.currentMesh);
     }
   }
 
@@ -1468,40 +1524,40 @@ export class Il {
     mesh.updateMatrixWorld(true);
   }
 
-  async registerPhysicsOnly() {
-    if (this.currentMesh === null || this.isMeshRegistered || this.currentClips.length > 0) return;
-    if (this.physicsOnlyRegistrationPromise !== null && this.physicsOnlyRegistrationMesh === this.currentMesh) {
-      await this.physicsOnlyRegistrationPromise;
+  async registerPhysicsOnlyForMesh(mesh) {
+    const state = this.modelStates.get(mesh);
+    if (!state || state.isRegistered || state.currentClips.length > 0) return;
+    if (this.physicsOnlyRegistrationPromises.has(mesh)) {
+      await this.physicsOnlyRegistrationPromises.get(mesh);
       return;
     }
 
-    const promise = this.doRegisterPhysicsOnly();
-    this.physicsOnlyRegistrationPromise = promise;
-    this.physicsOnlyRegistrationMesh = this.currentMesh;
+    const promise = this.doRegisterPhysicsOnlyForMesh(mesh);
+    this.physicsOnlyRegistrationPromises.set(mesh, promise);
     try {
       await promise;
     } finally {
-      if (this.physicsOnlyRegistrationPromise === promise) {
-        this.physicsOnlyRegistrationPromise = null;
-        this.physicsOnlyRegistrationMesh = null;
-      }
+      this.physicsOnlyRegistrationPromises.delete(mesh);
     }
   }
 
-  async doRegisterPhysicsOnly() {
-    if (this.currentMesh === null || this.isMeshRegistered || this.currentClips.length > 0) return;
-    const mesh = this.currentMesh;
+  async doRegisterPhysicsOnlyForMesh(mesh) {
+    const state = this.modelStates.get(mesh);
+    if (!state || state.isRegistered || state.currentClips.length > 0) return;
     const active = await this.physicsReady;
-    if (!active || this.currentMesh !== mesh || this.isMeshRegistered || this.currentClips.length > 0) return;
+    if (!active) return;
+    if (!this.modelStates.has(mesh) || state.isRegistered || state.currentClips.length > 0) return;
 
     this.helper.add(mesh, { physics: true });
-    this.isMeshRegistered = true;
+    state.isRegistered = true;
     this.resetLastAppliedGravity();
-    this.registerModelMixerFinishedListener();
+    this.registerModelMixerFinishedListenerForMesh(mesh);
   }
 
   applyWeightTransitions(delta) {
-    this.applyTransitionMap(this.modelWeightTransitions, this.currentActions, delta);
+    for (const state of this.modelStates.values()) {
+      this.applyTransitionMap(state.modelWeightTransitions, state.currentActions, delta);
+    }
     this.applyTransitionMap(this.cameraWeightTransitions, this.cameraActions, delta);
     if (this.activeCameraClip === null && !this.hasResetInactiveCamera && this.cameraWeightTransitions.size === 0) {
       this.resetRenderCameraLocal();
@@ -1529,29 +1585,39 @@ export class Il {
   }
 
   applyPhysicsSensor() {
-    if (this.currentMesh === null || !this.isMeshRegistered) return;
-    const physics = this.helper.objects.get(this.currentMesh)?.physics;
-    if (!physics || !physics.world) return;
-
     const ammo = getAmmo();
     if (ammo === null || this.currentCamera === null) return;
 
     const gravityVec = this.physicsSensor.getGravityVector(this.currentCamera);
-    if (this.shouldApplyGravity(gravityVec)) {
-      const ammoGravity = new ammo.btVector3(gravityVec.x, gravityVec.y, gravityVec.z);
-      physics.world.setGravity(ammoGravity);
-      if (ammo.destroy) ammo.destroy(ammoGravity);
+    const shouldApply = this.shouldApplyGravity(gravityVec);
+    const impulse = this.physicsSensor.consumePendingImpulse();
+
+    let ammoGravity = null;
+    let ammoImpulse = null;
+    if (shouldApply) ammoGravity = new ammo.btVector3(gravityVec.x, gravityVec.y, gravityVec.z);
+    if (impulse !== null) ammoImpulse = new ammo.btVector3(impulse.x, impulse.y, impulse.z);
+
+    for (const state of this.modelStates.values()) {
+      if (!state.isRegistered) continue;
+      const physics = this.helper.objects.get(state.mesh)?.physics;
+      if (!physics || !physics.world) continue;
+
+      if (shouldApply && ammoGravity) {
+        physics.world.setGravity(ammoGravity);
+      }
+      if (impulse !== null && ammoImpulse && physics.bodies) {
+        for (const bodyObj of physics.bodies) {
+          bodyObj.body.applyCentralImpulse(ammoImpulse);
+        }
+      }
+    }
+
+    if (shouldApply && ammoGravity) {
       this.updateLastAppliedGravity(gravityVec);
     }
 
-    const impulse = this.physicsSensor.consumePendingImpulse();
-    if (impulse === null || !physics.bodies) return;
-
-    const ammoImpulse = new ammo.btVector3(impulse.x, impulse.y, impulse.z);
-    for (const bodyObj of physics.bodies) {
-      bodyObj.body.applyCentralImpulse(ammoImpulse);
-    }
-    if (ammo.destroy) ammo.destroy(ammoImpulse);
+    if (ammoGravity && ammo.destroy) ammo.destroy(ammoGravity);
+    if (ammoImpulse && ammo.destroy) ammo.destroy(ammoImpulse);
   }
 
   shouldApplyGravity(vec) {
@@ -1570,26 +1636,25 @@ export class Il {
     this.lastAppliedGravity = null;
   }
 
-  registerModelMixerFinishedListener() {
-    this.removeModelMixerFinishedListener();
-    if (this.currentMesh === null) return;
-    const mixer = this.helper.objects.get(this.currentMesh)?.mixer;
+  registerModelMixerFinishedListenerForMesh(mesh) {
+    this.removeModelMixerFinishedListenerForMesh(mesh);
+    const mixer = this.helper.objects.get(mesh)?.mixer;
     if (mixer !== undefined) {
-      this.modelMixerListener = () => this.handleAnimationFinished();
-      mixer.addEventListener('finished', this.modelMixerListener);
+      const listener = () => this.handleAnimationFinished();
+      this.modelMixerListeners.set(mesh, listener);
+      mixer.addEventListener('finished', listener);
     }
   }
 
-  removeModelMixerFinishedListener() {
-    if (this.currentMesh === null || this.modelMixerListener === null) {
-      this.modelMixerListener = null;
-      return;
+  removeModelMixerFinishedListenerForMesh(mesh) {
+    const listener = this.modelMixerListeners.get(mesh);
+    if (listener) {
+      const mixer = this.helper.objects.get(mesh)?.mixer;
+      if (mixer !== undefined) {
+        mixer.removeEventListener('finished', listener);
+      }
+      this.modelMixerListeners.delete(mesh);
     }
-    const mixer = this.helper.objects.get(this.currentMesh)?.mixer;
-    if (mixer !== undefined) {
-      mixer.removeEventListener('finished', this.modelMixerListener);
-    }
-    this.modelMixerListener = null;
   }
 
   registerCameraMixerFinishedListener() {
@@ -1597,7 +1662,7 @@ export class Il {
     if (this.currentCamera === null) return;
     const mixer = this.helper.objects.get(this.currentCamera)?.mixer;
     if (mixer !== undefined) {
-      this.cameraMixerListener = () => this.handleAnimationFinished();
+      const listener = () => this.handleAnimationFinished();
       mixer.addEventListener('finished', this.cameraMixerListener);
     }
   }
@@ -1625,12 +1690,12 @@ export class Il {
     return this.currentMesh === null ? null : this.helper.objects.get(this.currentMesh)?.mixer ?? null;
   }
 
-  ensureModelMixer() {
-    if (this.currentMesh === null) return null;
-    const obj = this.helper.objects.get(this.currentMesh);
+  ensureModelMixerForMesh(mesh) {
+    if (mesh === null) return null;
+    const obj = this.helper.objects.get(mesh);
     if (obj === undefined) return null;
     if (obj.mixer === undefined) {
-      obj.mixer = new AnimationMixer(this.currentMesh);
+      obj.mixer = new AnimationMixer(mesh);
       obj.mixer.addEventListener('loop', e => {
         const tracks = (e.action?._clip || e.action?.getClip?.())?.tracks || [];
         if (tracks.length === 0 || tracks[0].name.slice(0, 6) === '.bones') {
@@ -1698,7 +1763,12 @@ export class Il {
   }
 
   getAllActions() {
-    return [...this.currentActions.values(), ...this.cameraActions.values()];
+    const actions = [];
+    for (const state of this.modelStates.values()) {
+      actions.push(...state.currentActions.values());
+    }
+    actions.push(...this.cameraActions.values());
+    return actions;
   }
 }
 
@@ -1899,6 +1969,7 @@ export class pu {
     
     this.originalMaterialSettings = new Map();
     this.animationFrameId = 0;
+    this.models = []; // 複数モデルを保持する配列
     this.currentModel = null;
     this.isTrackingEnabled = true;
     this.isRotationCenterMarkerRequestedVisible = false;
@@ -1941,24 +2012,43 @@ export class pu {
     this.grid.visible = settings.backgroundMode === 'grid';
   }
 
-  setModel(model) {
-    if (this.currentModel !== null) {
-      this.modelRoot.remove(this.currentModel);
+  addModel(model) {
+    if (!this.models.includes(model)) {
+      this.models.push(model);
+      this.modelRoot.add(model);
     }
-    this.originalMaterialSettings.clear();
     this.currentModel = model;
-    this.modelRoot.add(model);
     this.resetTrackingPanOffset();
     this.refreshTrackingBoneRef();
     this.syncTrackingActiveState();
     this.frameModel(model);
   }
 
-  clearModel() {
-    if (this.currentModel !== null) {
-      this.modelRoot.remove(this.currentModel);
-      this.currentModel = null;
+  removeModel(model) {
+    const idx = this.models.indexOf(model);
+    if (idx !== -1) {
+      this.models.splice(idx, 1);
     }
+    this.modelRoot.remove(model);
+    if (this.currentModel === model) {
+      this.currentModel = this.models.length > 0 ? this.models[this.models.length - 1] : null;
+    }
+    this.resetTrackingPanOffset();
+    this.refreshTrackingBoneRef();
+    this.syncTrackingActiveState();
+  }
+
+  setModel(model) {
+    this.clearModel();
+    this.addModel(model);
+  }
+
+  clearModel() {
+    for (const m of this.models) {
+      this.modelRoot.remove(m);
+    }
+    this.models = [];
+    this.currentModel = null;
     this.trackingBoneRef = null;
     this.originalMaterialSettings.clear();
     this.resetTrackingPanOffset();
@@ -2124,15 +2214,16 @@ export class pu {
   }
 
   traverseCurrentMaterials(callback) {
-    if (this.currentModel === null) return;
-    this.currentModel.traverse(child => {
-      if (child.isMesh || child.isSkinnedMesh) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        materials.forEach((mat, idx) => {
-          if (mat) callback(mat, child, idx);
-        });
-      }
-    });
+    for (const model of this.models) {
+      model.traverse(child => {
+        if (child.isMesh || child.isSkinnedMesh) {
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((mat, idx) => {
+            if (mat) callback(mat, child, idx);
+          });
+        }
+      });
+    }
   }
 
   frameModel(model) {

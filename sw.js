@@ -1,10 +1,11 @@
-const CACHE_NAME = "webmmd-cache-v15";
+const CACHE_NAME = "webmmd-cache-v16";
 
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./webmmd_files/ammo.js",
+  "./webmmd_files/js-yaml.min.js",
   "./webmmd_files/clean_logic.js",
   "./webmmd_files/handler.js",
   "./webmmd_files/ui.js",

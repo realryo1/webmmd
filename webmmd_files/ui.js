@@ -969,6 +969,49 @@ if ("serviceWorker" in navigator) {
     appObserver.observe(appRoot, { childList: true, subtree: true });
   }
 
+  const setSelectedAssets = (modelFileName, activeMotionFileNames) => {
+    if (modelFileName) {
+      const lowerModelName = modelFileName.toLowerCase();
+      const foundModel = indexedModelFiles.find((file) => toLower(getRelativePath(file)).endsWith(lowerModelName) || toLower(file.name) === lowerModelName);
+      if (foundModel) {
+        selectedAssetsModelPath = toLower(getRelativePath(foundModel));
+      } else {
+        selectedAssetsModelPath = "";
+      }
+    } else {
+      selectedAssetsModelPath = "";
+    }
+
+    const motionName = Array.isArray(activeMotionFileNames)
+      ? (activeMotionFileNames.length > 0 ? activeMotionFileNames[0] : null)
+      : activeMotionFileNames;
+
+    if (motionName) {
+      const lowerMotionName = motionName.toLowerCase();
+      const foundMotion = indexedMotionFiles.find((file) => toLower(getRelativePath(file)).endsWith(lowerMotionName) || toLower(file.name) === lowerMotionName);
+      if (foundMotion) {
+        selectedAssetsMotionPath = toLower(getRelativePath(foundMotion));
+      } else {
+        selectedAssetsMotionPath = "";
+      }
+    } else {
+      selectedAssetsMotionPath = "";
+    }
+
+    renderIndexed();
+  };
+
+  window.webmmdUI = {
+    loadModelByPath,
+    loadMotionByPath,
+    getCachedAssetsFiles: () => cachedAssetsFiles,
+    getIndexedModelFiles: () => indexedModelFiles,
+    getIndexedMotionFiles: () => indexedMotionFiles,
+    loadSoundForMotion,
+    stopCurrentAudio,
+    setSelectedAssets
+  };
+
   window.addEventListener("DOMContentLoaded", () => {
     setupIfReady();
   });

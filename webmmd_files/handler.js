@@ -85,12 +85,23 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
     statusText;
     viewerContainer;
     viewerLoading;
+    deployedModelsList;
+    savedScenesList;
+    sceneInput;
+    sceneSaveButton;
+    sceneLoadButton;
     lastRenderedMotionListKey = null;
     lastRenderedCameraMotionListKey = null;
     lastRenderedTrackingBoneSelectKey = null;
     lastRenderedMaterialOverrideListKey = null;
     constructor(e, t) {
-        this.handlers = t, this.root = e.querySelector(`.app-shell`) || document.querySelector(`.app-shell`), this.fileInput = document.querySelector(`.file-input`), this.loadedModelName = document.querySelector(`.loaded-model-name`), this.pendingModelLoadName = document.querySelector(`.pending-model-load`), this.modelFileError = document.querySelector(`.file-error--model`), this.motionInput = document.querySelector(`.motion-input`), this.pendingMotionLoadNames = document.querySelector(`.pending-motion-load`), this.motionFileError = document.querySelector(`.file-error--motion`), this.cameraMotionInput = document.querySelector(`.camera-motion-input`), this.pendingCameraMotionLoadNames = document.querySelector(`.pending-camera-motion-load`), this.cameraMotionFileError = document.querySelector(`.file-error--camera`), this.cameraControlsPanel = document.querySelector(`.camera-controls-panel`), this.gyroInput = document.querySelector(`.gyro-input`), this.gyroModeInputs = Array.from(document.querySelectorAll(`.gyro-mode-input`)), this.gyroViewpointSensitivityInput = document.querySelector(`.gyro-sensitivity-input--viewpoint`), this.gyroModelCenterSensitivityInput = document.querySelector(`.gyro-sensitivity-input--model-center`), this.gyroRecalibrateButton = document.querySelector(`.gyro-recalibrate-button`), this.trackingBoneField = document.querySelector(`.tracking-bone-field`), this.trackingEnabledInput = document.querySelector(`.tracking-enabled-input`), this.trackingBoneSelect = document.querySelector(`.tracking-bone-select`), this.playPauseButton = document.querySelector(`.play-pause-button`), this.resetButton = document.querySelector(`.reset-button`), this.poseResetButton = document.querySelector(`.pose-reset-button`), this.loopInput = document.querySelector(`.loop-input`), this.motionList = document.createElement(`div`), this.cameraMotionList = document.querySelector(`.camera-motion-list`), this.colorInput = document.querySelector(`.color-input`), this.backgroundModeSelect = document.querySelector(`.mode-select`), this.autoRestoreInput = document.querySelector(`.auto-restore-input`), this.screenAwakeInput = document.querySelector(`.screen-awake-toggle`), this.debugModeInput = document.querySelector(`.debug-mode-toggle`), this.physicsSensorInput = document.querySelector(`.physics-sensor-toggle`), this.gravityMagnitudeInput = document.querySelector(`.gravity-magnitude-input`), this.gravityMagnitudeValue = document.querySelector(`.gravity-magnitude-value`), this.physicsSensorImpulseSensitivityInput = document.querySelector(`.physics-sensor-impulse-sensitivity-input`), this.physicsSensorRecalibrateButton = document.querySelector(`.physics-sensor-recalibrate-button`), this.gravityVectorField = document.querySelector(`.gravity-vector-field`), this.gravityVectorInput = document.querySelector(`.gravity-vector-toggle`), this.storageUsageElement = document.querySelector(`.storage-usage`), this.rotationCenterMarkerInput = document.querySelector(`.rotation-center-marker-toggle`), this.materialOverridePanel = document.querySelector(`.material-override-panel`), this.materialSelectAllButton = document.querySelector(`.material-select-all-button`), this.materialClearAllButton = document.querySelector(`.material-clear-all-button`), this.materialOverrideList = document.querySelector(`.material-override-list`), this.clearCacheButton = document.querySelector(`.clear-cache-button`), this.shadowInput = document.querySelector(`.shadow-toggle`), this.viewerOverlay = document.querySelector(`.viewer-overlay`), this.fullscreenToggleButton = document.querySelector(`.fullscreen-toggle`), this.overlayPlaybackButton = document.querySelector(`.overlay-playback-toggle`), this.overlayResetButton = document.querySelector(`.overlay-reset-button`), this.overlayGyroRecalibrateButton = document.querySelector(`.overlay-gyro-recalibrate-button`), this.statusText = document.querySelector(`.status`), this.viewerContainer = document.querySelector(`.viewer`), this.viewerLoading = document.querySelector(`.viewer-loading`), this.viewerCanvas = this.viewerContainer ?.querySelector(`.viewer-canvas`), this.fileInput ?.addEventListener(`change`, () => {
+        this.handlers = t, this.root = e.querySelector(`.app-shell`) || document.querySelector(`.app-shell`), this.fileInput = document.querySelector(`.file-input`), this.loadedModelName = document.querySelector(`.loaded-model-name`), this.pendingModelLoadName = document.querySelector(`.pending-model-load`), this.modelFileError = document.querySelector(`.file-error--model`), this.motionInput = document.querySelector(`.motion-input`), this.pendingMotionLoadNames = document.querySelector(`.pending-motion-load`), this.motionFileError = document.querySelector(`.file-error--motion`), this.cameraMotionInput = document.querySelector(`.camera-motion-input`), this.pendingCameraMotionLoadNames = document.querySelector(`.pending-camera-motion-load`), this.cameraMotionFileError = document.querySelector(`.file-error--camera`), this.cameraControlsPanel = document.querySelector(`.camera-controls-panel`), this.gyroInput = document.querySelector(`.gyro-input`), this.gyroModeInputs = Array.from(document.querySelectorAll(`.gyro-mode-input`)), this.gyroViewpointSensitivityInput = document.querySelector(`.gyro-sensitivity-input--viewpoint`), this.gyroModelCenterSensitivityInput = document.querySelector(`.gyro-sensitivity-input--model-center`), this.gyroRecalibrateButton = document.querySelector(`.gyro-recalibrate-button`), this.trackingBoneField = document.querySelector(`.tracking-bone-field`), this.trackingEnabledInput = document.querySelector(`.tracking-enabled-input`), this.trackingBoneSelect = document.querySelector(`.tracking-bone-select`), this.playPauseButton = document.querySelector(`.play-pause-button`), this.resetButton = document.querySelector(`.reset-button`), this.poseResetButton = document.querySelector(`.pose-reset-button`), this.loopInput = document.querySelector(`.loop-input`), this.motionList = document.createElement(`div`), this.cameraMotionList = document.querySelector(`.camera-motion-list`), this.colorInput = document.querySelector(`.color-input`), this.backgroundModeSelect = document.querySelector(`.mode-select`), this.autoRestoreInput = document.querySelector(`.auto-restore-input`), this.screenAwakeInput = document.querySelector(`.screen-awake-toggle`), this.debugModeInput = document.querySelector(`.debug-mode-toggle`), this.physicsSensorInput = document.querySelector(`.physics-sensor-toggle`), this.gravityMagnitudeInput = document.querySelector(`.gravity-magnitude-input`), this.gravityMagnitudeValue = document.querySelector(`.gravity-magnitude-value`), this.physicsSensorImpulseSensitivityInput = document.querySelector(`.physics-sensor-impulse-sensitivity-input`), this.physicsSensorRecalibrateButton = document.querySelector(`.physics-sensor-recalibrate-button`), this.gravityVectorField = document.querySelector(`.gravity-vector-field`), this.gravityVectorInput = document.querySelector(`.gravity-vector-toggle`), this.storageUsageElement = document.querySelector(`.storage-usage`), this.rotationCenterMarkerInput = document.querySelector(`.rotation-center-marker-toggle`), this.materialOverridePanel = document.querySelector(`.material-override-panel`), this.materialSelectAllButton = document.querySelector(`.material-select-all-button`), this.materialClearAllButton = document.querySelector(`.material-clear-all-button`), this.materialOverrideList = document.querySelector(`.material-override-list`), this.clearCacheButton = document.querySelector(`.clear-cache-button`), this.shadowInput = document.querySelector(`.shadow-toggle`), this.viewerOverlay = document.querySelector(`.viewer-overlay`), this.fullscreenToggleButton = document.querySelector(`.fullscreen-toggle`), this.overlayPlaybackButton = document.querySelector(`.overlay-playback-toggle`), this.overlayResetButton = document.querySelector(`.overlay-reset-button`), this.overlayGyroRecalibrateButton = document.querySelector(`.overlay-gyro-recalibrate-button`), this.statusText = document.querySelector(`.status`), this.viewerContainer = document.querySelector(`.viewer`), this.viewerLoading = document.querySelector(`.viewer-loading`), this.viewerCanvas = this.viewerContainer ?.querySelector(`.viewer-canvas`),
+        this.deployedModelsList = document.querySelector(`#deployed-models-list`),
+        this.savedScenesList = document.querySelector(`#saved-scenes-list`),
+        this.sceneInput = document.querySelector(`.scene-input`),
+        this.sceneSaveButton = document.querySelector(`#scene-save-button`),
+        this.sceneLoadButton = document.querySelector(`#scene-load-button`),
+        this.fileInput ?.addEventListener(`change`, () => {
             this.fileInput.files !== null && this.fileInput.files.length > 0 && this.handlers.onFilesSelected(this.fileInput.files)
         }), this.motionInput ?.addEventListener(`change`, () => {
             if (this.motionInput.files !== null) {
@@ -104,6 +115,12 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
             this.cameraMotionInput.files !== null && this.cameraMotionInput.files.length > 0 && (this.handlers.onCameraFilesSelected(Array.from(this.cameraMotionInput.files)), this.cameraMotionInput.value = ``)
         }), this.gyroInput ?.addEventListener(`change`, () => {
             this.handlers.onGyroEnabledChanged(this.gyroInput.checked)
+        }), this.sceneInput ?.addEventListener(`change`, () => {
+            this.sceneInput.files !== null && this.sceneInput.files.length > 0 && (this.handlers.onSceneLoad?.(this.sceneInput.files[0]), this.sceneInput.value = ``)
+        }), this.sceneSaveButton ?.addEventListener(`click`, () => {
+            this.handlers.onSceneSave?.()
+        }), this.sceneLoadButton ?.addEventListener(`click`, () => {
+            this.sceneInput ?.click()
         });
         for (let e of this.gyroModeInputs) e.addEventListener(`change`, () => {
             e.checked && this.handlers.onGyroModeChanged(e.value)
@@ -182,7 +199,136 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
         } if (e.errorMessage !== null) {
             this.statusText.textContent = e.errorMessage;
             return
-        } this.statusText.textContent = e.loadedModel === null ? qd: ``
+        } this.statusText.textContent = e.loadedModel === null ? qd: ``;
+        this.renderDeployedModels(e);
+        this.renderSavedScenes(e);
+    } renderDeployedModels(e) {
+        if (!this.deployedModelsList) return;
+        this.deployedModelsList.replaceChildren();
+        if (!e.models || e.models.length === 0) {
+            const empty = document.createElement("p");
+            empty.className = "motion-empty";
+            empty.style.margin = "0";
+            empty.textContent = "配置されているモデルはありません。";
+            this.deployedModelsList.append(empty);
+            return;
+        }
+        for (const m of e.models) {
+            const row = document.createElement("div");
+            row.className = "deployed-model-row";
+            row.style.borderBottom = "1px solid #2a3542";
+            row.style.padding = "0.5em 0";
+
+            const header = document.createElement("div");
+            header.style.display = "flex";
+            header.style.justifyContent = "space-between";
+            header.style.alignItems = "center";
+
+            const label = document.createElement("label");
+            label.className = "checkbox-field";
+            const radio = document.createElement("input");
+            radio.type = "radio";
+            radio.name = "active-model-choice";
+            radio.checked = m.isActive;
+            radio.addEventListener("change", () => {
+                if (radio.checked) this.handlers.onActiveModelChanged?.(m.id);
+            });
+            const span = document.createElement("span");
+            span.className = "motion-name";
+            span.textContent = m.fileName;
+            label.append(radio, span);
+
+            const removeBtn = this.createMotionRemoveButton(() => this.handlers.onModelRemove?.(m.id), e.isLoading);
+            header.append(label, removeBtn);
+            row.append(header);
+
+            const transformRow = document.createElement("div");
+            transformRow.style.display = "flex";
+            transformRow.style.gap = "0.5em";
+            transformRow.style.fontSize = "0.9em";
+            transformRow.style.marginTop = "0.3em";
+            
+            ['x', 'y', 'z'].forEach(axis => {
+                const field = document.createElement("label");
+                field.style.display = "flex";
+                field.style.alignItems = "center";
+                field.style.gap = "0.2em";
+                const axisLabel = document.createElement("span");
+                axisLabel.style.color = "#7b8ba4";
+                axisLabel.textContent = axis.toUpperCase();
+                const input = document.createElement("input");
+                input.type = "number";
+                input.step = "0.5";
+                input.style.width = "4em";
+                input.style.background = "#1b2531";
+                input.style.color = "#fff";
+                input.style.border = "1px solid #3b4859";
+                input.value = (m.position[axis] || 0).toFixed(1);
+                input.addEventListener("change", () => {
+                    this.handlers.onModelPositionChanged?.(m.id, axis, parseFloat(input.value) || 0);
+                });
+                field.append(axisLabel, input);
+                transformRow.append(field);
+            });
+            row.append(transformRow);
+            this.deployedModelsList.append(row);
+        }
+    } renderSavedScenes(e) {
+        if (!this.savedScenesList) return;
+        this.savedScenesList.replaceChildren();
+        if (!e.savedScenes || e.savedScenes.length === 0) {
+            const empty = document.createElement("p");
+            empty.className = "motion-empty";
+            empty.style.margin = "0";
+            empty.textContent = "保存されたシーンはありません。";
+            this.savedScenesList.append(empty);
+            return;
+        }
+        for (const s of e.savedScenes) {
+            const row = document.createElement("div");
+            row.className = "scene-entry";
+            row.style.display = "flex";
+            row.style.justifyContent = "space-between";
+            row.style.alignItems = "center";
+            row.style.padding = "0.3em 0";
+
+            const nameSpan = document.createElement("span");
+            nameSpan.className = "motion-name";
+            nameSpan.style.cursor = "pointer";
+            nameSpan.textContent = s.name;
+            nameSpan.title = "シーンを復元";
+            nameSpan.addEventListener("click", () => {
+                this.handlers.onLoadSavedScene?.(s.yaml);
+            });
+
+            const actions = document.createElement("div");
+            actions.style.display = "flex";
+            actions.style.gap = "0.3em";
+
+            const downloadBtn = document.createElement("button");
+            downloadBtn.type = "button";
+            downloadBtn.className = "motion-remove-button";
+            downloadBtn.title = "ダウンロード";
+            downloadBtn.innerHTML = `
+                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor">
+                  <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
+                </svg>
+            `;
+            downloadBtn.addEventListener("click", () => {
+                const blob = new Blob([s.yaml], { type: 'text/yaml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = s.name;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+
+            const deleteBtn = this.createMotionRemoveButton(() => this.handlers.onDeleteSavedScene?.(s.timestamp), false);
+            actions.append(downloadBtn, deleteBtn);
+            row.append(nameSpan, actions);
+            this.savedScenesList.append(row);
+        }
     } renderCameraMotionList(e) {
         let t = [e.loadedCameraMotions.map(e => e.fileName).join(`|`), e.activeCameraMotionFileName ?? ``, String(e.isLoading), String(e.isCameraMotionLoading)].join(`::`);
         if (t === this.lastRenderedCameraMotionListKey) return ;
@@ -266,6 +412,14 @@ try {
         const parsed = JSON.parse(savedSettings);
         Z.setState({ settings: parsed });
     }
+    const savedScenesStr = localStorage.getItem('webmmd-saved-scenes');
+    if (savedScenesStr) {
+        const savedScenes = JSON.parse(savedScenesStr);
+        Z.setState({ savedScenes });
+    } else {
+        Z.setState({ savedScenes: [] });
+    }
+    Z.setState({ models: [], loadedModel: null });
 } catch (err) {
     console.warn('[settings] load failed', err);
 }
@@ -274,13 +428,13 @@ Q.setPlaybackFinishedCallback(() => {
         isPlaying: !1
     })
 });
-var _f = null, vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = new of(hf, {
+var loadedModels = [], vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = new of(hf, {
     onFilesSelected: e => {
         Ef(e)
     }, onMotionFilesSelected: e => {
         const mesh = Q.getCurrentMesh();
         if (mesh !== null) {
-            for (const action of Q.currentActions.values()) {
+            for (const action of Q.getCurrentActions().values()) {
                 action.time = 0;
                 action.enabled = false;
             }
@@ -313,6 +467,147 @@ var _f = null, vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = new of(hf,
         Mf(e)
     }, onCameraMotionRemove: e => {
         Af(e)
+    }, onActiveModelChanged: id => {
+        const nextModels = Z.getState().models.map(m => ({ ...m, isActive: m.id === id }));
+        const targetModel = loadedModels.find(m => m.model.uuid === id);
+        if (targetModel) {
+            $.currentModel = targetModel.model;
+            Q.currentMesh = targetModel.model.isSkinnedMesh ? targetModel.model : getSkinnedMesh(targetModel.model);
+            const boneNames = gu(targetModel.model);
+            Z.setState({
+                models: nextModels,
+                loadedModel: {
+                    fileName: targetModel.fileName,
+                    object: targetModel.model,
+                    availableBoneNames: boneNames
+                },
+                loadedMotions: targetModel.loadedMotions || [],
+                hasMotion: (targetModel.loadedMotions || []).length > 0,
+                trackingBoneName: targetModel.trackingBoneName || null
+            });
+            $.setTrackingBone(targetModel.trackingBoneName || null);
+            if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
+                const activeMotions = (targetModel.loadedMotions || []).filter(mo => mo.isActive).map(mo => mo.fileName);
+                window.webmmdUI.setSelectedAssets(targetModel.fileName, activeMotions);
+            }
+        }
+    }, onModelPositionChanged: (id, axis, val) => {
+        const nextModels = Z.getState().models.map(m => {
+            if (m.id === id) {
+                const pos = { ...m.position, [axis]: val };
+                const targetModel = loadedModels.find(t => t.model.uuid === id);
+                if (targetModel) {
+                    targetModel.model.position[axis] = val;
+                }
+                return { ...m, position: pos };
+            }
+            return m;
+        });
+        Z.setState({ models: nextModels });
+    }, onModelRemove: id => {
+        const targetIndex = loadedModels.findIndex(m => m.model.uuid === id);
+        if (targetIndex !== -1) {
+            const target = loadedModels[targetIndex];
+            $.removeModel(target.model);
+            Q.removeModel(target.model);
+            target.dispose();
+            loadedModels.splice(targetIndex, 1);
+        }
+        const nextModels = Z.getState().models.filter(m => m.id !== id);
+        if (nextModels.length > 0 && !nextModels.some(m => m.isActive)) {
+            nextModels[nextModels.length - 1].isActive = true;
+        }
+        Z.setState({ models: nextModels });
+        
+        const activeModel = nextModels.find(m => m.isActive);
+        if (activeModel) {
+            const targetModel = loadedModels.find(m => m.model.uuid === activeModel.id);
+            if (targetModel) {
+                $.currentModel = targetModel.model;
+                Q.currentMesh = targetModel.model.isSkinnedMesh ? targetModel.model : getSkinnedMesh(targetModel.model);
+                const boneNames = gu(targetModel.model);
+                Z.setState({
+                    loadedModel: {
+                        fileName: targetModel.fileName,
+                        object: targetModel.model,
+                        availableBoneNames: boneNames
+                    },
+                    loadedMotions: targetModel.loadedMotions || [],
+                    hasMotion: (targetModel.loadedMotions || []).length > 0
+                });
+                if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
+                    const activeMotions = (targetModel.loadedMotions || []).filter(mo => mo.isActive).map(mo => mo.fileName);
+                    window.webmmdUI.setSelectedAssets(targetModel.fileName, activeMotions);
+                }
+            }
+        } else {
+            $.currentModel = null;
+            Q.currentMesh = null;
+            Z.setState({ loadedModel: null, loadedMotions: [], hasMotion: false });
+            if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
+                window.webmmdUI.setSelectedAssets(null, null);
+            }
+        }
+    }, onSceneSave: () => {
+        const modelsState = Z.getState().models;
+        const sceneData = {
+            models: modelsState.map(m => {
+                const targetModel = loadedModels.find(t => t.model.uuid === m.id);
+                return {
+                    fileName: m.fileName,
+                    position: [m.position.x, m.position.y, m.position.z],
+                    motions: (targetModel?.loadedMotions || []).map(mo => mo.fileName)
+                };
+            }),
+            cameraMotion: Z.getState().activeCameraMotionFileName
+        };
+        const yamlStr = jsyaml.dump(sceneData);
+        const blob = new Blob([yamlStr], { type: 'text/yaml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `scene_${Date.now()}.yml`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        const savedScenes = [...(Z.getState().savedScenes || [])];
+        const newScene = {
+            name: `scene_${Date.now()}.yml`,
+            yaml: yamlStr,
+            timestamp: Date.now()
+        };
+        savedScenes.push(newScene);
+        Z.setState({ savedScenes });
+        try {
+            localStorage.setItem('webmmd-saved-scenes', JSON.stringify(savedScenes));
+        } catch(e) {
+            console.warn('Failed to save scenes to localStorage', e);
+        }
+    }, onSceneLoad: file => {
+        const reader = new FileReader();
+        reader.onload = async e => {
+            try {
+                const yamlStr = e.target.result;
+                await loadSceneFromYaml(yamlStr);
+            } catch (err) {
+                console.error('Failed to parse scene YAML', err);
+                alert('シーンファイルの読み込みに失敗しました。');
+            }
+        };
+        reader.readAsText(file);
+    }, onLoadSavedScene: yamlStr => {
+        loadSceneFromYaml(yamlStr).catch(err => {
+            console.error(err);
+            alert('シーンの読み込みに失敗しました。');
+        });
+    }, onDeleteSavedScene: timestamp => {
+        const savedScenes = (Z.getState().savedScenes || []).filter(s => s.timestamp !== timestamp);
+        Z.setState({ savedScenes });
+        try {
+            localStorage.setItem('webmmd-saved-scenes', JSON.stringify(savedScenes));
+        } catch(e) {
+            console.warn('Failed to save scenes to localStorage', e);
+        }
     }, onGyroEnabledChanged: e => {
         $.setGyroEnabled(e), Z.setState({
             isGyroEnabled: e, settings: {
@@ -361,7 +656,7 @@ var _f = null, vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = new of(hf,
     }, onPoseResetRequested: () => {
         let mesh = Q.getCurrentMesh();
         if (mesh !== null) {
-            for (let action of Q.currentActions.values()) {
+            for (let action of Q.getCurrentActions().values()) {
                 action.time = 0;
                 action.enabled = false;
             }
@@ -485,25 +780,12 @@ $.renderer.toneMappingExposure = 0.8;
 // Shadow map setup (PCFSoftShadowMap=2)
 $.renderer.shadowMap.enabled = true;
 $.renderer.shadowMap.type = 2;
-$.scene.traverse(function(obj) {
-    if (obj.isDirectionalLight) {
-        obj.shadow.mapSize.width = 1024;
-        obj.shadow.mapSize.height = 1024;
-        obj.shadow.camera.near = 0.5;
-        obj.shadow.camera.far = 500;
-        obj.shadow.camera.left = -50;
-        obj.shadow.camera.right = 50;
-        obj.shadow.camera.top = 50;
-        obj.shadow.camera.bottom = -50;
-        obj.castShadow = false; // 初期状態OFF
-    }
-});
 function applyShadowEnabled(enabled) {
     $.scene.traverse(function(obj) {
         if (obj.isDirectionalLight) obj.castShadow = enabled;
     });
-    if ($.currentModel !== null) {
-        $.currentModel.traverse(function(obj) {
+    $.models.forEach(function(model) {
+        model.traverse(function(obj) {
             if (obj.isMesh || obj.isSkinnedMesh) {
                 obj.castShadow = enabled;
                 obj.receiveShadow = enabled;
@@ -511,7 +793,7 @@ function applyShadowEnabled(enabled) {
                 mats.forEach(function(m) { if (m) m.needsUpdate = true; });
             }
         });
-    }
+    });
 }
 Q.setCamera($.getCamera()), $.setGravityVectorProvider({
     getGravityVector: () => Q.getPhysicsSensor().getGravityVector($.getCamera())
@@ -554,23 +836,47 @@ async function Tf() {
                 loadGeneration: t, currentGeneration: xf
             }), n.dispose();
             return
-        } _f !== null && _f.dispose(), _f = n, console.debug(`[main] openFiles: applying model to viewer/controller`, {
-            fileName: n.fileName
-        }), $.setModel(n.model), Q.setModel(n.model), Wf(), Gf(), applyShadowEnabled(Z.getState().settings.isShadowEnabled === true), Z.getState().settings.isDebugModeEnabled && $.dumpMaterialDetails();
+        }
+        
+        const currentModels = Z.getState().models.map(m => ({ ...m, isActive: false }));
+        
+        loadedModels.push(n);
+        $.addModel(n.model);
+        Q.addModel(n.model);
+        Wf();
+        Gf();
+        applyShadowEnabled(Z.getState().settings.isShadowEnabled === true);
+        Z.getState().settings.isDebugModeEnabled && $.dumpMaterialDetails();
+        
         let {
             materialVisibilityOverrides: r, suspiciousMaterials: i
         } = Vf(), a = gu(n.model), o = Hf(a);
         $.setTrackingBone(o), xd(n.cachedBlobs).catch (e => {
             console.warn(`[main] saveCurrentModel: failed`, e)
-        }), Rf(), If(`openFiles:success`, [`isLoading`, `isPlaying`, `hasMotion`, `loadedModel`, `loadedMotions`, `loadedCameraMotions`, `activeCameraMotionFileName`, `trackingBoneName`, `settings.trackingBoneName`, `modelLoadError`, `pendingModelLoadName`]), Z.setState({
+        }), Rf();
+        
+        const newModelId = n.model.uuid;
+        const newModelObj = {
+            id: newModelId,
+            fileName: n.fileName,
+            isActive: true,
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0 }
+        };
+        const nextModels = [...currentModels, newModelObj];
+        n.loadedMotions = [];
+        
+        Z.setState({
             isLoading: !1, isPlaying: !1, hasMotion: !1, modelLoadError: null, pendingModelLoadName: null, loadedMotions: [], loadedCameraMotions: [], suspiciousMaterials: i, materialVisibilityOverrides: r, activeCameraMotionFileName: null, trackingBoneName: o, settings: {
 ...Z.getState().settings, trackingBoneName: o
             }, loadedModel: {
                 fileName: n.fileName, object: n.model, availableBoneNames: a
-            }
-        }), console.debug(`[main] openFiles: complete`, {
-            loadGeneration: t, fileName: n.fileName, modelType: n.model.type, childrenLength: n.model.children.length
-        })
+            },
+            models: nextModels
+        });
+        if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
+            window.webmmdUI.setSelectedAssets(n.fileName, []);
+        }
     } catch (e) {
         if (t !== xf) {
             console.debug(`[main] openFiles: ignored stale error`, {
@@ -614,8 +920,7 @@ async function Tf() {
         }), t !== Sf) {
             console.debug(`[main] openMotionFiles: ignored stale result`, {
                 loadGeneration: t, currentGeneration: Sf
-            });
-            for (let t of e) t.dispose();
+            }), n.dispose();
             return
         } a = e, console.debug(`[main] openMotionFiles: addMotions before`, {
             loadGeneration: t, clipCount: e.length, clipNames: e.map(e => e.clip.name)
@@ -629,14 +934,27 @@ async function Tf() {
             fileName: t.fileName, clipName: t.clip.name
         }), Q.setMotionActive(t.clip, !0);
         Q.setPlaying(false);
-        let o = [...Z.getState().loadedMotions, ...e.map(e => ({
-            fileName: e.fileName, isActive: !0
-        }))];
-        If(`openMotionFiles:success`, [`isMotionLoading`, `hasMotion`, `loadedMotions`, `motionLoadError`, `pendingMotionLoadNames`]), console.debug(`[main] openMotionFiles: next loadedMotions`, {
-            loadGeneration: t, loadedMotionsLength: o.length, loadedMotions: o
-        }), Z.setState({
-            isMotionLoading: !1, hasMotion: !0, loadedMotions: o, motionLoadError: null, pendingMotionLoadNames: [], isPlaying: false
-        }), (async() => {
+        
+        const activeModelId = $.currentModel?.uuid;
+        const targetModel = loadedModels.find(m => m.model.uuid === activeModelId);
+        if (targetModel) {
+            targetModel.loadedMotions = targetModel.loadedMotions || [];
+            targetModel.loadedMotions.push(...e.map(m => ({ fileName: m.fileName, isActive: true })));
+            
+            Z.setState({
+                isMotionLoading: !1,
+                hasMotion: !0,
+                loadedMotions: targetModel.loadedMotions,
+                motionLoadError: null,
+                pendingMotionLoadNames: [],
+                isPlaying: false
+            });
+            if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
+                const activeMotions = (targetModel.loadedMotions || []).filter(mo => mo.isActive).map(mo => mo.fileName);
+                window.webmmdUI.setSelectedAssets(targetModel.fileName, activeMotions);
+            }
+        }
+        (async() => {
             try {
                 await zf(), await Lf(), Rf()
             } catch (e) {
@@ -722,7 +1040,13 @@ async function Tf() {
     })), a = i.some(e => e.isActive), o = n.activeCameraMotionFileName !== null, s = n.isPlaying && (a || o);
     Q.setPlaying(s), Z.setState({
         loadedMotions: i, hasMotion: i.length > 0, isPlaying: s
-    }), await zf(), await Lf(), console.debug(`[main] removeMotion`, {
+    });
+    const activeModelId = $.currentModel?.uuid;
+    const targetModel = loadedModels.find(m => m.model.uuid === activeModelId);
+    if (targetModel) {
+        targetModel.loadedMotions = i;
+    }
+    await zf(), await Lf(), console.debug(`[main] removeMotion`, {
         fileName: e, remainingCount: vf.length
     })
 } async function Af(e) {
@@ -754,11 +1078,16 @@ async function Tf() {
         console.warn(`[main] setMotionActive: motion was not found`, {
             fileName: e
         });
-        return
+        return;
     } Q.setMotionActive(s.clip, t);
     Z.setState({
         loadedMotions: r, isPlaying: false
     });
+    const activeModelId = $.currentModel?.uuid;
+    const targetModel = loadedModels.find(m => m.model.uuid === activeModelId);
+    if (targetModel) {
+        targetModel.loadedMotions = r;
+    }
     Q.setPlaying(false);
     Lf();
 } function Mf(e) {
@@ -777,7 +1106,139 @@ async function Tf() {
     console.debug(`[main] setActiveCameraMotion`, {
         fileName: e
     });
-} async function Nf() {
+}
+async function loadSceneFromYaml(yamlStr) {
+    const sceneData = jsyaml.load(yamlStr);
+    if (!sceneData || !sceneData.models) {
+        throw new Error("Invalid scene YAML structure");
+    }
+    
+    for (const m of loadedModels) {
+        $.removeModel(m.model);
+        Q.removeModel(m.model);
+        m.dispose();
+    }
+    loadedModels = [];
+    vf = [];
+    Z.setState({ models: [], loadedModel: null, loadedMotions: [], hasMotion: false });
+    
+    const availableModelFiles = window.webmmdUI.getIndexedModelFiles();
+    const availableMotionFiles = window.webmmdUI.getIndexedMotionFiles();
+    
+    for (const modelDef of sceneData.models) {
+        const foundModel = availableModelFiles.find(file => file.name.toLowerCase() === modelDef.fileName.toLowerCase());
+        if (!foundModel) {
+            console.warn(`Model not found in assets cache: ${modelDef.fileName}`);
+            continue;
+        }
+        
+        const modelFiles = [foundModel];
+        if (!foundModel.name.toLowerCase().endsWith(".zip")) {
+            const companionFiles = window.webmmdUI.getCachedAssetsFiles().filter(file => {
+                const raw = file.webkitRelativePath || file.name;
+                const path = raw.replace(/\\/g, "/");
+                const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
+                return ext !== ".pmx" && ext !== ".zip" && ext !== ".vmd" && path.toLowerCase() !== foundModel.name.toLowerCase();
+            });
+            modelFiles.push(...companionFiles);
+        }
+        
+        const n = await zu(modelFiles);
+        
+        if (modelDef.position) {
+            n.model.position.set(modelDef.position[0], modelDef.position[1], modelDef.position[2]);
+        }
+        
+        loadedModels.push(n);
+        $.addModel(n.model);
+        Q.addModel(n.model);
+        n.loadedMotions = [];
+        
+        if (modelDef.motions && modelDef.motions.length > 0) {
+            const motionClips = [];
+            const newVmds = [];
+            for (const motionFileName of modelDef.motions) {
+                const foundMotion = availableMotionFiles.find(file => file.name.toLowerCase() === motionFileName.toLowerCase());
+                if (foundMotion) {
+                    const loadedVmd = await ed([foundMotion], n.model);
+                    if (loadedVmd && loadedVmd.length > 0) {
+                        motionClips.push(loadedVmd[0].clip);
+                        newVmds.push(loadedVmd[0]);
+                    }
+                }
+            }
+            if (motionClips.length > 0) {
+                Q.currentMesh = n.model.isSkinnedMesh ? n.model : getSkinnedMesh(n.model);
+                const added = await Q.addMotions(motionClips);
+                if (added) {
+                    vf.push(...newVmds);
+                    n.loadedMotions = newVmds.map(v => ({ fileName: v.fileName, isActive: true }));
+                    for (const v of newVmds) Q.setMotionActive(v.clip, true);
+                }
+            }
+        }
+    }
+    
+    const nextModels = loadedModels.map((m, idx) => ({
+        id: m.model.uuid,
+        fileName: m.fileName,
+        isActive: idx === loadedModels.length - 1,
+        position: { x: m.model.position.x, y: m.model.position.y, z: m.model.position.z },
+        rotation: { x: m.model.rotation.x, y: m.model.rotation.y, z: m.model.rotation.z }
+    }));
+    
+    if (sceneData.cameraMotion) {
+        const foundCameraMotion = availableMotionFiles.find(file => file.name === sceneData.cameraMotion);
+        if (foundCameraMotion) {
+            const loadedCam = await id([foundCameraMotion]);
+            if (loadedCam && loadedCam.length > 0) {
+                Q.addCameraMotions(loadedCam.map(c => c.clip));
+                yf.push(...loadedCam);
+                Q.setActiveCameraMotion(loadedCam[0].clip);
+                Z.setState({
+                    loadedCameraMotions: yf.map(y => ({ fileName: y.fileName })),
+                    activeCameraMotionFileName: sceneData.cameraMotion
+                });
+            }
+        }
+    }
+    
+    Z.setState({ models: nextModels });
+    
+    if (loadedModels.length > 0) {
+        const lastLoaded = loadedModels[loadedModels.length - 1];
+        $.currentModel = lastLoaded.model;
+        Q.currentMesh = lastLoaded.model.isSkinnedMesh ? lastLoaded.model : getSkinnedMesh(lastLoaded.model);
+        const boneNames = gu(lastLoaded.model);
+        Z.setState({
+            loadedModel: {
+                fileName: lastLoaded.fileName,
+                object: lastLoaded.model,
+                availableBoneNames: boneNames
+            },
+            loadedMotions: lastLoaded.loadedMotions || [],
+            hasMotion: (lastLoaded.loadedMotions || []).length > 0
+        });
+        if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
+            const activeMotions = (lastLoaded.loadedMotions || []).filter(mo => mo.isActive).map(mo => mo.fileName);
+            window.webmmdUI.setSelectedAssets(lastLoaded.fileName, activeMotions);
+        }
+    }
+    
+    Q.setPlaying(false);
+    Z.setState({ isPlaying: false });
+    
+    alert("シーンを読み込みました。");
+}
+function getSkinnedMesh(group) {
+    if (group.isSkinnedMesh) return group;
+    let skinnedMesh = null;
+    group.traverse(child => {
+        if (child.isSkinnedMesh) skinnedMesh = child;
+    });
+    return skinnedMesh;
+}
+async function Nf() {
     let e = bf;
     if (!Z.getState().settings.isAutoRestoreEnabled) {
         console.debug(`[main] restoreSessionOnStartup: disabled`);
@@ -911,7 +1372,15 @@ async function Tf() {
 } async function Uf() {
     Pf(`clearSessionCache`), console.debug(`[main] clearSessionCache: start`);
     try {
-        await Td(), Z.reset(), Rf(), console.debug(`[main] clearSessionCache: complete`)
+        await Td();
+        for (const m of loadedModels) {
+            m.dispose();
+        }
+        loadedModels = [];
+        Z.reset();
+        Z.setState({ models: [], savedScenes: [] });
+        Rf();
+        console.debug(`[main] clearSessionCache: complete`)
     } catch (e) {
         console.error(`[main] clearSessionCache: error`, e), Z.setState({
             errorMessage: Kf(e)
