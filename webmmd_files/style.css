@@ -36,22 +36,20 @@ select {
     background: #191d22;
     border-right: 1px solid #2c323a;
     flex-direction: column;
-    gap: 16px;
     min-height: 0;
-    padding: 18px;
+    padding: 0 18px;
     display: flex;
     overflow-y: auto
 }
 
 .brand {
     align-items: center;
-    gap: 12px;
     display: flex
 }
 
 .brand h1 {
     letter-spacing: 0;
-    margin: 0;
+    padding: 12px 0;
     font-size: 18px;
     font-weight: 650
 }
@@ -59,8 +57,7 @@ select {
 .panel {
     border-top: 1px solid #2c323a;
     flex-direction: column;
-    padding-top: 12px;
-    padding-bottom: 4px;
+    padding: 12px 0;
     display: flex
 }
 

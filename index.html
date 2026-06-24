@@ -20,10 +20,10 @@
   <div id="app">
     <div class="app-shell">
       <aside class="sidebar">
-        <header class="brand">
-          <h1>webmmd</h1>
-        </header>
         <div hidden>
+          <header class="brand">
+            <h1>webmmd</h1>
+          </header>
           <input class="file-input" type="file" multiple />
           <span class="loaded-model-name"></span>
           <span class="pending-load pending-model-load" hidden></span>
@@ -45,8 +45,7 @@
             <div class="panel-content-inner">
               <div class="field" id="assets-controls">
                 <p id="assets-path-display" class="motion-empty" style="margin:0">現在のアセットパス：未設定</p>
-                <button id="assets-open-button" type="button" class="action-button">assets フォルダを設定</button>
-                <button id="assets-rescan-button" type="button" class="action-button">再スキャン</button>
+                <button id="assets-open-button" type="button" class="action-button">アセットフォルダを設定・更新</button>
               </div>
             </div>
           </div>
@@ -181,11 +180,12 @@
                 <span>回転モード</span>
                 <div class="gyro-mode-row">
                   <label class="checkbox-field">
-                    <input class="gyro-mode-input" type="radio" name="gyro-mode" value="viewpoint" checked="" disabled="">
+                    <input class="gyro-mode-input" type="radio" name="gyro-mode" value="viewpoint" checked=""
+                      disabled="">
                     <span>視点回転</span>
                   </label>
-                  <input class="gyro-sensitivity-input gyro-sensitivity-input--viewpoint" type="range" min="0.1" max="3.0"
-                    step="0.05" disabled="">
+                  <input class="gyro-sensitivity-input gyro-sensitivity-input--viewpoint" type="range" min="0.1"
+                    max="3.0" step="0.05" disabled="">
                 </div>
                 <div class="gyro-mode-row">
                   <label class="checkbox-field">

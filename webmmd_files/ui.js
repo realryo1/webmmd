@@ -792,20 +792,22 @@ if ("serviceWorker" in navigator) {
       await chooseAssetsDirectory();
     });
 
-    rescanButton.addEventListener("click", async () => {
-      if (currentAssetsDirectoryHandle) {
-        await scanFromDirectoryHandle(true, true);
-        return;
-      }
+    if (rescanButton) {
+      rescanButton.addEventListener("click", async () => {
+        if (currentAssetsDirectoryHandle) {
+          await scanFromDirectoryHandle(true, true);
+          return;
+        }
 
-      if (cachedAssetsFiles.length === 0) {
-        updateStatus("先に assets フォルダを設定してください。");
-        showPopup("再スキャン失敗: assets フォルダが未設定です。", true);
-        return;
-      }
-      const result = scan();
-      showPopup(result.ok ? "再スキャン完了" : "再スキャン失敗", !result.ok);
-    });
+        if (cachedAssetsFiles.length === 0) {
+          updateStatus("先に assets フォルダを設定してください。");
+          showPopup("再スキャン失敗: assets フォルダが未設定です。", true);
+          return;
+        }
+        const result = scan();
+        showPopup(result.ok ? "再スキャン完了" : "再スキャン失敗", !result.ok);
+      });
+    }
 
     const clearCacheButton = document.querySelector(".clear-cache-button");
     if (clearCacheButton && clearCacheButton.dataset.assetsClearHooked !== "1") {
