@@ -620,7 +620,9 @@ if ("serviceWorker" in navigator) {
       const motionListNode = document.getElementById("assets-motion-list");
       if (!modelListNode || !motionListNode) return;
 
-      if (!selectedAssetsMotionPath) {
+      if (!selectedAssetsModelPath) {
+        selectedAssetsMotionPath = "";
+      } else if (!selectedAssetsMotionPath) {
         const persistedMotionPath = localStorage.getItem(ASSETS_SELECTED_MOTION_PATH_KEY) || "";
         if (persistedMotionPath) {
           selectedAssetsMotionPath = toLower(persistedMotionPath);
@@ -997,6 +999,7 @@ if ("serviceWorker" in navigator) {
       }
     } else {
       selectedAssetsMotionPath = "";
+      localStorage.removeItem(ASSETS_SELECTED_MOTION_PATH_KEY);
     }
 
     renderIndexed();

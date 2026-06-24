@@ -578,7 +578,7 @@ var loadedModels = [], vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = ne
             models: modelsState.map(m => {
                 const targetModel = loadedModels.find(t => t.model.uuid === m.id);
                 return {
-                    fileName: m.fileName,
+                    fileName: m.originalFileName || m.fileName,
                     position: [m.position.x, m.position.y, m.position.z],
                     motions: (targetModel?.loadedMotions || []).map(mo => mo.fileName)
                 };
@@ -586,13 +586,6 @@ var loadedModels = [], vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = ne
             cameraMotion: Z.getState().activeCameraMotionFileName
         };
         const yamlStr = jsyaml.dump(sceneData);
-        const blob = new Blob([yamlStr], { type: 'text/yaml' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `scene_${Date.now()}.yml`;
-        a.click();
-        URL.revokeObjectURL(url);
         
         const savedScenes = [...(Z.getState().savedScenes || [])];
         const newScene = {
@@ -891,7 +884,7 @@ async function Tf() {
         let {
             materialVisibilityOverrides: r, suspiciousMaterials: i
         } = Vf(), a = gu(n.model), o = Hf(a);
-        $.setTrackingBone(o), xd(n.cachedBlobs).catch (e => {
+        $.setTrackingBone(o), xd(n.cachedBlobs, n.originalFileName).catch (e => {
             console.warn(`[main] saveCurrentModel: failed`, e)
         }), Rf();
         
@@ -899,6 +892,7 @@ async function Tf() {
         const newModelObj = {
             id: newModelId,
             fileName: n.fileName,
+            originalFileName: n.originalFileName,
             isActive: true,
             position: { x: 0, y: 0, z: 0 },
             rotation: { x: 0, y: 0, z: 0 }
@@ -1148,6 +1142,8 @@ async function Tf() {
     });
 }
 async function loadSceneFromYaml(yamlStr) {
+    Q.setPlaying(false);
+    Z.setState({ isPlaying: false });
     const sceneData = jsyaml.load(yamlStr);
     if (!sceneData || !sceneData.models) {
         throw new Error("Invalid scene YAML structure");
@@ -1208,7 +1204,21 @@ async function loadSceneFromYaml(yamlStr) {
                 }
             }
             if (motionClips.length > 0) {
-                Q.currentMesh = n.model.isSkinnedMesh ? n.model : getSkinnedMesh(n.model);
+                const mesh = n.model.isSkinnedMesh ? n.model : getSkinnedMesh(n.model);
+                Q.currentMesh = mesh;
+                if (mesh !== null) {
+                    Q.resetMeshToRestPose(mesh);
+                    const ho = Q.helper.objects.get(mesh);
+                    if (ho?.backupBones) {
+                        const bones = mesh.skeleton.bones;
+                        const bb = ho.backupBones;
+                        for (let i = 0; i < bones.length; i++) {
+                            bones[i].position.toArray(bb, i * 7);
+                            bones[i].quaternion.toArray(bb, i * 7 + 3);
+                        }
+                    }
+                    if (ho?.physics) ho.physics.reset();
+                }
                 const added = await Q.addMotions(motionClips);
                 if (added) {
                     vf.push(...newVmds);
@@ -1222,6 +1232,7 @@ async function loadSceneFromYaml(yamlStr) {
     const nextModels = loadedModels.map((m, idx) => ({
         id: m.model.uuid,
         fileName: m.fileName,
+        originalFileName: m.originalFileName,
         isActive: idx === loadedModels.length - 1,
         position: { x: m.model.position.x, y: m.model.position.y, z: m.model.position.z },
         rotation: { x: m.model.rotation.x, y: m.model.rotation.y, z: m.model.rotation.z }
@@ -1287,6 +1298,9 @@ async function Nf() {
             isMotionLoading: false,
             isCameraMotionLoading: false
         });
+        if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
+            window.webmmdUI.setSelectedAssets(null, null);
+        }
         try {
             await Td();
         } catch (err) {
@@ -1301,11 +1315,14 @@ async function Nf() {
         if (!Ff(e, `loadSession`)) return ;
         if (t === null || t.modelFiles.length === 0) {
             console.debug(`[main] restoreSessionOnStartup: no cached session`);
+            if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
+                window.webmmdUI.setSelectedAssets(null, null);
+            }
             return
         } If(`restoreSessionOnStartup:startLoading`, [`isLoading`, `isMotionLoading`, `isCameraMotionLoading`, `errorMessage`]), Z.setState({
             isLoading: !0, isMotionLoading: t.modelVmds.length > 0, isCameraMotionLoading: t.cameraVmds.length > 0, errorMessage: null
         });
-        let n = await Bu(t.modelFiles);
+        let n = await Bu(t.modelFiles, t.originalFileName);
         if (!Ff(e, `loadPmxFromCachedBlobs`)) {
             n.dispose();
             return
@@ -1345,7 +1362,12 @@ async function Nf() {
             })), suspiciousMaterials: i, materialVisibilityOverrides: r, activeCameraMotionFileName: u.some(e => e.fileName === t.activeCameraMotionFileName) ? t.activeCameraMotionFileName: null, trackingBoneName: o, settings: {
 ...Z.getState().settings, trackingBoneName: o
             }
-        }), console.debug(`[main] restoreSessionOnStartup: complete`, {
+        });
+        if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
+            const activeMotions = c.filter(e => l.has(e.fileName)).map(e => e.fileName);
+            window.webmmdUI.setSelectedAssets(n.fileName, activeMotions);
+        }
+        console.debug(`[main] restoreSessionOnStartup: complete`, {
             restoreGeneration: e, modelFileName: n.fileName, modelVmds: c.length, cameraVmds: u.length
         })
     } catch (t) {
@@ -1353,7 +1375,10 @@ async function Nf() {
         Wf(), Gf(), _f !== null && (_f.dispose(), _f = null), $.clearModel(), Q.clearModel(), If(`restoreSessionOnStartup:error`, [`isLoading`, `isMotionLoading`, `isCameraMotionLoading`, `isPlaying`, `hasMotion`, `loadedModel`, `loadedMotions`, `loadedCameraMotions`]), Z.setState({
             isLoading: !1, isMotionLoading: !1, isCameraMotionLoading: !1, isPlaying: !1, hasMotion: !1, loadedModel: null, loadedMotions: [], loadedCameraMotions: [], suspiciousMaterials: [], materialVisibilityOverrides: {
             }, activeCameraMotionFileName: null, trackingBoneName: null
-        })
+        });
+        if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
+            window.webmmdUI.setSelectedAssets(null, null);
+        }
     }
 } function Pf(e) {
     bf += 1, console.debug(`[main] invalidatePendingSessionRestore`, {
@@ -1431,7 +1456,16 @@ async function Nf() {
         count: vf.length, fileNames: vf.map(e => e.fileName)
     });
     for (let e of vf) e.dispose();
-    vf = [], Q.clearMotion()
+    vf = [], Q.clearMotion();
+    const activeModelId = $.currentModel?.uuid;
+    const targetModel = loadedModels.find(m => m.model.uuid === activeModelId);
+    if (targetModel) {
+        targetModel.loadedMotions = [];
+    }
+    Z.setState({
+        loadedMotions: [],
+        hasMotion: false
+    });
 } function Gf() {
     console.debug(`[main] clearActiveCameraMotion`, {
         count: yf.length, fileNames: yf.map(e => e.fileName)

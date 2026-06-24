@@ -284,6 +284,7 @@ function getDefaultSessionState() {
   return {
     id: KEY_PATH,
     modelFiles: [],
+    originalFileName: null,
     modelVmds: [],
     cameraVmds: [],
     activeModelVmdFileNames: [],
@@ -345,10 +346,11 @@ export async function bd() {
   return session;
 }
 
-export async function xd(modelFiles) {
+export async function xd(modelFiles, originalFileName) {
   cachedSession = {
     ...cachedSession,
     modelFiles: modelFiles,
+    originalFileName: originalFileName,
     modelVmds: [],
     cameraVmds: [],
     activeModelVmdFileNames: [],
@@ -601,7 +603,9 @@ export async function zu(files) {
       name: getBaseName(e.path).toLowerCase(),
       blob: e.blob
     }));
-    return parseModelFiles(normalized);
+    const result = await parseModelFiles(normalized);
+    result.originalFileName = zipFile.name;
+    return result;
   }
 
   const normalized = fileList.map(f => ({
@@ -609,10 +613,15 @@ export async function zu(files) {
     name: f.name.toLowerCase(),
     file: f
   }));
-  return parseModelFiles(normalized);
+  const result = await parseModelFiles(normalized);
+  const pmxFile = fileList.find(f => f.name.toLowerCase().endsWith('.pmx'));
+  if (pmxFile) {
+    result.originalFileName = pmxFile.name;
+  }
+  return result;
 }
 
-export async function Bu(cachedBlobs) {
+export async function Bu(cachedBlobs, originalFileName) {
   const normalized = cachedBlobs.map(cb => {
     const normPath = getNormalizedPath(cb.path);
     return {
@@ -621,7 +630,11 @@ export async function Bu(cachedBlobs) {
       blob: cb.blob
     };
   });
-  return parseModelFiles(normalized);
+  const result = await parseModelFiles(normalized);
+  if (originalFileName) {
+    result.originalFileName = originalFileName;
+  }
+  return result;
 }
 
 function loadVmdPromise(vmdUrl, loader, mesh, source) {
