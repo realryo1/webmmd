@@ -260,6 +260,15 @@ function sf(e, t) {
 } var df = `先に PMX モデルを読み込んでください。`, ff = `VMD モーションをモデルへ適用できませんでした。`, pf = `モデスの読み込みに失敗しました。`, mf = [/\u8155/,/\u3046\u3067/,/\u624b/,/\u6307/,/\u808c/,/\u7d20\u808c/,/\u4f53/,/\u30dc\u30c7\u30a3/,/skin/i,/arm/i,/hand/i,/body/i], hf = document.querySelector(`#app`);
 if (hf === null) throw Error(`#app element was not found.`);
 var Z = new jd, gf = new mu, Q = new Il(Wl());
+try {
+    const savedSettings = localStorage.getItem('webmmd-settings');
+    if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        Z.setState({ settings: parsed });
+    }
+} catch (err) {
+    console.warn('[settings] load failed', err);
+}
 Q.setPlaybackFinishedCallback(() => {
     Z.setState({
         isPlaying: !1
@@ -506,7 +515,12 @@ Q.setCamera($.getCamera()), $.setGravityVectorProvider({
 }), Q.setPhysicsSensorEnabled(Z.getState().settings.isPhysicsSensorEnabled), Q.setGravityMagnitude(Z.getState().settings.gravityMagnitude), Q.setPhysicsSensorImpulseSensitivity(Z.getState().settings.physicsSensorImpulseSensitivity), $.setGyroMode(Z.getState().settings.gyroMode), $.setGyroViewpointSensitivity(Z.getState().settings.gyroViewpointSensitivity), $.setGyroModelCenterSensitivity(Z.getState().settings.gyroModelCenterSensitivity), $.setGyroEnabled(Z.getState().isGyroEnabled), $.setTrackingEnabled(Z.getState().settings.isTrackingEnabled), gf.setEnabled(Z.getState().settings.isScreenAwakeEnabled), $.setCameraVmdStateProvider({
     hasActiveCameraMotion: () => Z.getState().activeCameraMotionFileName !== null
 }), $.setFrameUpdater(Q), Q.setDebugModeEnabled(Z.getState().settings.isDebugModeEnabled), Z.subscribe(e => {
-    wf.render(e), $.applySettings(e.settings), Q.setDebugModeEnabled(e.settings.isDebugModeEnabled), $.setGravityArrowVisible(e.settings.isDebugModeEnabled && e.settings.isGravityVectorVisible), $.setRotationCenterMarkerVisible(e.settings.isRotationCenterMarkerVisible && e.loadedModel !== null && e.settings.isTrackingEnabled && e.trackingBoneName !== null), applyShadowEnabled(e.settings.isShadowEnabled === true)
+    wf.render(e), $.applySettings(e.settings), Q.setDebugModeEnabled(e.settings.isDebugModeEnabled), $.setGravityArrowVisible(e.settings.isDebugModeEnabled && e.settings.isGravityVectorVisible), $.setRotationCenterMarkerVisible(e.settings.isRotationCenterMarkerVisible && e.loadedModel !== null && e.settings.isTrackingEnabled && e.trackingBoneName !== null), applyShadowEnabled(e.settings.isShadowEnabled === true);
+    try {
+        localStorage.setItem('webmmd-settings', JSON.stringify(e.settings));
+    } catch(err) {
+        console.warn('[settings] save failed', err);
+    }
 }), Ul(e => {
     Z.setState({
         isFullscreen: e
@@ -609,14 +623,14 @@ async function Tf() {
         for (let t of e) console.debug(`[main] openMotionFiles: setMotionActive`, {
             fileName: t.fileName, clipName: t.clip.name
         }), Q.setMotionActive(t.clip, !0);
-        Q.setPlaying(Z.getState().isPlaying);
+        Q.setPlaying(false);
         let o = [...Z.getState().loadedMotions, ...e.map(e => ({
             fileName: e.fileName, isActive: !0
         }))];
         If(`openMotionFiles:success`, [`isMotionLoading`, `hasMotion`, `loadedMotions`, `motionLoadError`, `pendingMotionLoadNames`]), console.debug(`[main] openMotionFiles: next loadedMotions`, {
             loadGeneration: t, loadedMotionsLength: o.length, loadedMotions: o
         }), Z.setState({
-            isMotionLoading: !1, hasMotion: !0, loadedMotions: o, motionLoadError: null, pendingMotionLoadNames: []
+            isMotionLoading: !1, hasMotion: !0, loadedMotions: o, motionLoadError: null, pendingMotionLoadNames: [], isPlaying: false
         }), (async() => {
             try {
                 await zf(), await Lf(), Rf()
@@ -728,7 +742,7 @@ async function Tf() {
 } function jf(e, t) {
     let n = Z.getState(), r = n.loadedMotions.map(n => n.fileName === e ? {
 ...n, isActive: t
-    }: n), i = n.isPlaying, a = r.filter(e => e.isActive).length, o = n.activeCameraMotionFileName !== null, s = vf.find(t => t.fileName === e), c = (a > 0 || o) && i;
+    }: n), a = r.filter(e => e.isActive).length, s = vf.find(t => t.fileName === e);
     if (console.debug(`[main] setMotionActive`, {
         fileName: e, isActive: t, activeCount: a
     }), s === void 0) {
@@ -736,12 +750,12 @@ async function Tf() {
             fileName: e
         });
         return
-    } if (Q.setMotionActive(s.clip, t), Z.setState({
-        loadedMotions: r, isPlaying: c
-    }), Lf(), !c) {
-        Q.setPlaying(!1);
-        return
-    } Q.setPlaying(!0)
+    } Q.setMotionActive(s.clip, t);
+    Z.setState({
+        loadedMotions: r, isPlaying: false
+    });
+    Q.setPlaying(false);
+    Lf();
 } function Mf(e) {
     let t = Z.getState(), n = e === null ? null: yf.find(t => t.fileName === e);
     if (e !== null && n === void 0) {
@@ -750,12 +764,14 @@ async function Tf() {
         });
         return
     } Q.setActiveCameraMotion(n ?.clip ?? null);
-    let r = (t.loadedMotions.some(e => e.isActive) || e !== null) && t.isPlaying;
-    Q.setPlaying(r), Z.setState({
-        activeCameraMotionFileName: e, isPlaying: r
-    }), Lf(), console.debug(`[main] setActiveCameraMotion`, {
+    Q.setPlaying(false);
+    Z.setState({
+        activeCameraMotionFileName: e, isPlaying: false
+    });
+    Lf();
+    console.debug(`[main] setActiveCameraMotion`, {
         fileName: e
-    })
+    });
 } async function Nf() {
     let e = bf;
     if (!Z.getState().settings.isAutoRestoreEnabled) {

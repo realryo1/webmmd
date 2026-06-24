@@ -514,8 +514,45 @@ function loadModelPromise(pmxUrl, loader) {
   });
 }
 
+async function selectPmxFile(pmxFiles) {
+  if (pmxFiles.length === 0) return null;
+  if (pmxFiles.length === 1) return pmxFiles[0];
+
+  return new Promise(resolve => {
+    const dialog = document.createElement('dialog');
+    dialog.style.cssText = 'padding:1.2em 1.4em;border-radius:8px;border:1px solid #555;background:#1e1e1e;color:#eee;min-width:260px;max-width:90vw';
+
+    const p = document.createElement('p');
+    p.textContent = 'ZIPファイル内に複数のPMXファイルが含まれています。読み込むモデルを選択してください。';
+    p.style.cssText = 'margin:0 0 .8em;font-size:.9em';
+    dialog.appendChild(p);
+
+    const sorted = pmxFiles.slice().sort((a, b) => {
+      const depthA = (a.path.match(/\//g) || []).length;
+      const depthB = (b.path.match(/\//g) || []).length;
+      return depthA - depthB || a.path.localeCompare(b.path);
+    });
+
+    for (const file of sorted) {
+      const btn = document.createElement('button');
+      btn.textContent = file.path;
+      btn.style.cssText = 'display:block;width:100%;text-align:left;padding:.4em .6em;margin:.25em 0;background:#2d2d2d;color:#eee;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:.85em;word-break:break-all';
+      btn.addEventListener('click', () => {
+        dialog.close();
+        document.body.removeChild(dialog);
+        resolve(file);
+      });
+      dialog.appendChild(btn);
+    }
+
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  });
+}
+
 async function parseModelFiles(normalizedFiles) {
-  const pmxFile = normalizedFiles.find(f => f.name.endsWith('.pmx'));
+  const pmxFiles = normalizedFiles.filter(f => f.name.endsWith('.pmx'));
+  const pmxFile = await selectPmxFile(pmxFiles);
   if (!pmxFile) {
     throw new Error('No .pmx file was found in the selected files.');
   }
