@@ -1,4 +1,4 @@
-const CACHE_NAME = "webmmd-cache-v21";
+const CACHE_NAME = "webmmd-cache-v24";
 
 const APP_SHELL = [
   "./",

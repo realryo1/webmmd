@@ -1143,7 +1143,7 @@ class MaterialBuilder {
 			params.opacity = material.diffuse[ 3 ];
 			params.specular = new Color().setRGB( ...material.specular, SRGBColorSpace );
 			params.shininess = material.shininess;
-			params.emissive = new Color().setRGB( ...material.ambient, SRGBColorSpace );
+			params.emissive = new Color( 0x000000 );
 			params.transparent = params.opacity !== 1.0;
 
 			//
@@ -1300,8 +1300,6 @@ class MaterialBuilder {
 					this._checkImageTransparency( params.map, geometry, i );
 
 				}
-
-				params.emissive.multiplyScalar( 0.2 );
 
 			}
 

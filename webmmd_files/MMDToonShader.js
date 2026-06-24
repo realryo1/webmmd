@@ -29,7 +29,9 @@ struct BlinnPhongMaterial {
 
 void RE_Direct_BlinnPhong( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in BlinnPhongMaterial material, inout ReflectedLight reflectedLight ) {
 
-	vec3 irradiance = getGradientIrradiance( geometryNormal, directLight.direction ) * directLight.color;
+	vec3 irradiance = getGradientIrradiance( geometryNormal, directLight.direction );
+
+	irradiance = max( irradiance, vec3( 0.3 ) ) * directLight.color;
 
 	reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );
 
@@ -62,7 +64,7 @@ const mmd_toon_matcap_fragment = /* glsl */`
 
 	#elif defined( MATCAP_BLENDING_ADD )
 
-		outgoingLight += matcapColor.rgb;
+		outgoingLight += matcapColor.rgb * matcapColor.a;
 
 	#endif
 
