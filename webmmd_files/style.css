@@ -59,9 +59,71 @@ select {
 .panel {
     border-top: 1px solid #2c323a;
     flex-direction: column;
-    gap: 14px;
-    padding-top: 16px;
+    padding-top: 12px;
+    padding-bottom: 4px;
     display: flex
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    padding: 6px 0;
+    transition: color 0.2s ease
+}
+
+.panel-header:hover {
+    color: #fff
+}
+
+.panel-header h3,
+.panel-header .debug-material-title,
+.panel-header .settings-group__title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 650;
+    color: #d9e2ec
+}
+
+.panel-toggle-icon {
+    font-size: 10px;
+    color: #8fa3b8;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-right: 4px
+}
+
+.panel.collapsed .panel-toggle-icon {
+    transform: rotate(-90deg)
+}
+
+.panel-content {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, margin-top 0.3s ease;
+    opacity: 1;
+    margin-top: 10px
+}
+
+.panel.collapsed .panel-content {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    margin-top: 0 !important;
+    pointer-events: none
+}
+
+.panel-content-inner {
+    overflow: hidden;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px
+}
+
+.panel-content-inner .settings-group {
+    border-top: 0;
+    padding-top: 0
 }
 
 .field {

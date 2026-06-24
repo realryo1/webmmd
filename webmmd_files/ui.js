@@ -939,6 +939,47 @@ if ("serviceWorker" in navigator) {
     }
     // ---- サウンド再生同期フック ここまで ----
 
+    // ---- アコーディオン（折りたたみ）制御 ----
+    const setupAccordions = () => {
+      const panels = document.querySelectorAll(".sidebar .panel[data-section-id]");
+      panels.forEach((panel) => {
+        const header = panel.querySelector(".panel-header");
+        const sectionId = panel.dataset.sectionId;
+        if (!header || !sectionId) return;
+
+        if (header.dataset.accordionHooked === "1") return;
+        header.dataset.accordionHooked = "1";
+
+        const storageKey = `webmmd.panel.${sectionId}.collapsed`;
+        const defaultCollapsed = [
+          "camera-motion",
+          "sound",
+          "scene",
+          "material-override",
+          "camera-controls",
+          "settings-display",
+          "settings-physics",
+          "settings-system",
+          "settings-debug"
+        ].includes(sectionId);
+
+        const savedState = localStorage.getItem(storageKey);
+        const isCollapsed = savedState !== null ? savedState === "true" : defaultCollapsed;
+
+        if (isCollapsed) {
+          panel.classList.add("collapsed");
+        } else {
+          panel.classList.remove("collapsed");
+        }
+
+        header.addEventListener("click", () => {
+          const collapsed = panel.classList.toggle("collapsed");
+          localStorage.setItem(storageKey, collapsed ? "true" : "false");
+        });
+      });
+    };
+    setupAccordions();
+
     updateStatus(STATUS_DEFAULT);
     renderIndexed();
 
