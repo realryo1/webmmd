@@ -271,6 +271,14 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
             transformRow.style.gap = "0.5em";
             transformRow.style.fontSize = "0.9em";
             transformRow.style.marginTop = "0.3em";
+            transformRow.style.alignItems = "center";
+            
+            const posLabel = document.createElement("span");
+            posLabel.style.color = "#7b8ba4";
+            posLabel.style.width = "2.5em";
+            posLabel.style.fontSize = "0.85em";
+            posLabel.textContent = "Pos:";
+            transformRow.append(posLabel);
             
             ['x', 'y', 'z'].forEach(axis => {
                 const field = document.createElement("label");
@@ -295,6 +303,44 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
                 transformRow.append(field);
             });
             row.append(transformRow);
+
+            const rotationRow = document.createElement("div");
+            rotationRow.style.display = "flex";
+            rotationRow.style.gap = "0.5em";
+            rotationRow.style.fontSize = "0.9em";
+            rotationRow.style.marginTop = "0.3em";
+            rotationRow.style.alignItems = "center";
+            
+            const rotLabel = document.createElement("span");
+            rotLabel.style.color = "#7b8ba4";
+            rotLabel.style.width = "2.5em";
+            rotLabel.style.fontSize = "0.85em";
+            rotLabel.textContent = "Rot:";
+            rotationRow.append(rotLabel);
+            
+            ['x', 'y', 'z'].forEach(axis => {
+                const field = document.createElement("label");
+                field.style.display = "flex";
+                field.style.alignItems = "center";
+                field.style.gap = "0.2em";
+                const axisLabel = document.createElement("span");
+                axisLabel.style.color = "#7b8ba4";
+                axisLabel.textContent = axis.toUpperCase();
+                const input = document.createElement("input");
+                input.type = "number";
+                input.step = "5";
+                input.style.width = "4em";
+                input.style.background = "#1b2531";
+                input.style.color = "#fff";
+                input.style.border = "1px solid #3b4859";
+                input.value = (m.rotation && m.rotation[axis] !== undefined ? m.rotation[axis] : 0).toFixed(1);
+                input.addEventListener("change", () => {
+                    this.handlers.onModelRotationChanged?.(m.id, axis, parseFloat(input.value) || 0);
+                });
+                field.append(axisLabel, input);
+                rotationRow.append(field);
+            });
+            row.append(rotationRow);
             
             // 影ON/OFFのチェックボックス
             const shadowRow = document.createElement("div");
@@ -559,6 +605,19 @@ var loadedModels = [], vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = ne
             return m;
         });
         Z.setState({ models: nextModels });
+    }, onModelRotationChanged: (id, axis, val) => {
+        const nextModels = Z.getState().models.map(m => {
+            if (m.id === id) {
+                const rot = { ...m.rotation, [axis]: val };
+                const targetModel = loadedModels.find(t => t.model.uuid === id);
+                if (targetModel) {
+                    targetModel.model.rotation[axis] = val * Math.PI / 180;
+                }
+                return { ...m, rotation: rot };
+            }
+            return m;
+        });
+        Z.setState({ models: nextModels });
     }, onModelShadowChanged: (id, enabled) => {
         const nextModels = Z.getState().models.map(m => {
             if (m.id === id) {
@@ -624,6 +683,7 @@ var loadedModels = [], vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = ne
                 return {
                     fileName: m.originalFileName || m.fileName,
                     position: [m.position.x, m.position.y, m.position.z],
+                    rotation: [m.rotation.x, m.rotation.y, m.rotation.z],
                     motions: (targetModel?.loadedMotions || []).map(mo => mo.fileName),
                     isShadowEnabled: m.isShadowEnabled !== false
                 };
@@ -1255,6 +1315,14 @@ async function loadSceneFromYaml(yamlStr) {
             n.model.position.set(modelDef.position[0], modelDef.position[1], modelDef.position[2]);
         }
         
+        if (modelDef.rotation) {
+            n.model.rotation.set(
+                modelDef.rotation[0] * Math.PI / 180,
+                modelDef.rotation[1] * Math.PI / 180,
+                modelDef.rotation[2] * Math.PI / 180
+            );
+        }
+        
         loadedModels.push(n);
         $.addModel(n.model);
         Q.addModel(n.model);
@@ -1305,7 +1373,11 @@ async function loadSceneFromYaml(yamlStr) {
         originalFileName: m.originalFileName,
         isActive: idx === loadedModels.length - 1,
         position: { x: m.model.position.x, y: m.model.position.y, z: m.model.position.z },
-        rotation: { x: m.model.rotation.x, y: m.model.rotation.y, z: m.model.rotation.z },
+        rotation: {
+            x: m.model.rotation.x * 180 / Math.PI,
+            y: m.model.rotation.y * 180 / Math.PI,
+            z: m.model.rotation.z * 180 / Math.PI
+        },
         isShadowEnabled: m.isShadowEnabled !== false
     }));
     
