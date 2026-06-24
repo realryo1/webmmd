@@ -96,6 +96,8 @@ export class jd {
         gyroViewpointSensitivity: 1.0,
         gyroModelCenterSensitivity: 1.0,
         isGyroEnabled: false,
+        isChestSwayEnabled: false,
+        chestDamping: 0.1,
       },
       ...initialState
     };
@@ -1067,6 +1069,8 @@ export class Il {
     
     this.physicsOnlyRegistrationPromises = new Map(); // mesh -> promise
     this.isDebugModeEnabled = false;
+    this.isChestSwayEnabled = false;
+    this.chestDamping = 0.1;
   }
 
   addModel(group) {
@@ -1153,6 +1157,113 @@ export class Il {
 
   setLoadingPaused(paused) {
     this.isLoadingPaused = paused;
+  }
+
+  /**
+   * 胸揺れ（胸ボーン物理演算）の有効/無効を切り替える。
+   * enabled=true の時、胸ボーンを持つ剛体を動力学体として解放する。
+   * enabled=false の時、胸ボーンの剛体をキネマティック体としてロックする。
+   */
+  setChestSwayEnabled(enabled, damping = 0.1) {
+    this.isChestSwayEnabled = enabled;
+    this.chestDamping = damping;
+    this._applyChestSwayToAllMeshes();
+  }
+
+  _applyChestSwayToAllMeshes() {
+    for (const state of this.modelStates.values()) {
+      if (!state.isRegistered) continue;
+      const physicsObj = this.helper.objects.get(state.mesh)?.physics;
+      if (!physicsObj || !physicsObj.bodies) continue;
+      this._applyChestSwayToPhysics(physicsObj, state.mesh);
+    }
+  }
+
+  _applyChestSwayToPhysics(physicsObj, mesh) {
+    const bodies = physicsObj.bodies;
+    const constraints = physicsObj.constraints || [];
+    const chestBoneNames = ['胸', '上半身2', '胸腔', 'UpperBody2'];
+
+    // 胸に関連する剛体をマークする
+    const chestBodies = new Set();
+    for (const body of bodies) {
+      const boneName = body.params?.boneIndex !== undefined
+        ? mesh.skeleton?.bones?.[body.params.boneIndex]?.name ?? ''
+        : '';
+      const isChestBone = chestBoneNames.some(n => boneName === n || boneName.includes('胸'));
+      if (isChestBone) {
+        chestBodies.add(body);
+      }
+    }
+
+    // 剛体の状態と減衰の設定
+    for (const body of bodies) {
+      if (!chestBodies.has(body)) continue;
+      try {
+        if (this.isChestSwayEnabled) {
+          // dynamic: 物理演算で動かす
+          body.body.setCollisionFlags(0);
+          body.body.activate(true);
+          // dampingを適用: 0=よく揺れる、1=揺れにくい
+          const d = Math.max(0, Math.min(1, this.chestDamping));
+          body.body.setDamping(d * 0.9, d * 0.9);
+        } else {
+          // 元のtypeに戻す: type0=kinematic(2), type1/2=dynamic(0)
+          const originalType = body.params?.type ?? 0;
+          if (originalType === 0) {
+            body.body.setCollisionFlags(2); // kinematic
+          } else {
+            // dampingも元のPMX定義値に戻す
+            const ld = body.params?.linearDamping ?? 0.5;
+            const ad = body.params?.angularDamping ?? 0.5;
+            body.body.setDamping(ld, ad);
+            body.body.setCollisionFlags(0); // dynamic
+            body.body.activate(true);
+          }
+        }
+      } catch(e) {
+        console.debug('[chestSway] body flag change failed', e);
+      }
+    }
+
+    // 胸に関連する制約（ジョイント）のバネ設定を調整
+    for (const constraint of constraints) {
+      const isChestConstraint = chestBodies.has(constraint.bodyA) || chestBodies.has(constraint.bodyB);
+      if (!isChestConstraint) continue;
+      try {
+        if (this.isChestSwayEnabled) {
+          // stiffnessを弱めて動きやすくする
+          // chestDampingが0の時は非常に柔らかく (0.01倍)、1の時は元の硬さ (1.0倍) に近づくようマッピング
+          const d = Math.max(0, Math.min(1, this.chestDamping));
+          const factor = 0.01 + 0.99 * Math.pow(d, 2);
+
+          for (let i = 0; i < 3; i++) {
+            if (constraint.params.springPosition && constraint.params.springPosition[i] !== 0) {
+              constraint.constraint.setStiffness(i, constraint.params.springPosition[i] * factor);
+            }
+          }
+          for (let i = 0; i < 3; i++) {
+            if (constraint.params.springRotation && constraint.params.springRotation[i] !== 0) {
+              constraint.constraint.setStiffness(i + 3, constraint.params.springRotation[i] * factor);
+            }
+          }
+        } else {
+          // 元の硬さに戻す
+          for (let i = 0; i < 3; i++) {
+            if (constraint.params.springPosition && constraint.params.springPosition[i] !== 0) {
+              constraint.constraint.setStiffness(i, constraint.params.springPosition[i]);
+            }
+          }
+          for (let i = 0; i < 3; i++) {
+            if (constraint.params.springRotation && constraint.params.springRotation[i] !== 0) {
+              constraint.constraint.setStiffness(i + 3, constraint.params.springRotation[i]);
+            }
+          }
+        }
+      } catch(e) {
+        console.debug('[chestSway] constraint stiffness change failed', e);
+      }
+    }
   }
 
   async setMotions(clips) {
@@ -1552,6 +1663,14 @@ export class Il {
     state.isRegistered = true;
     this.resetLastAppliedGravity();
     this.registerModelMixerFinishedListenerForMesh(mesh);
+
+    // 胸揺れがONなら物理ボディをdynamicに切り替える（OFFなら一切触らない）
+    if (this.isChestSwayEnabled) {
+      const physicsObj = this.helper.objects.get(mesh)?.physics;
+      if (physicsObj && physicsObj.bodies) {
+        this._applyChestSwayToBodies(physicsObj.bodies, mesh);
+      }
+    }
   }
 
   applyWeightTransitions(delta) {

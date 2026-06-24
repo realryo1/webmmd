@@ -28,6 +28,7 @@ if ("serviceWorker" in navigator) {
   let currentAssetsDirectoryHandle = null;
   let assetsPathDisplayNode = null;
   const customPathMap = new WeakMap();
+  let renderIndexed = () => {};
 
   // ---- サウンド ----
   let currentAudio = null;
@@ -614,7 +615,7 @@ if ("serviceWorker" in navigator) {
       return true;
     };
 
-    const renderIndexed = () => {
+    renderIndexed = () => {
       const modelListNode = document.getElementById("assets-model-list");
       const motionListNode = document.getElementById("assets-motion-list");
       if (!modelListNode || !motionListNode) return;

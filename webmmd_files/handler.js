@@ -90,6 +90,11 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
     sceneInput;
     sceneSaveButton;
     sceneLoadButton;
+    chestSwayToggle;
+    chestStiffnessInput;
+    chestStiffnessValue;
+    chestDampingInput;
+    chestDampingValue;
     lastRenderedMotionListKey = null;
     lastRenderedCameraMotionListKey = null;
     lastRenderedTrackingBoneSelectKey = null;
@@ -101,6 +106,11 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
         this.sceneInput = document.querySelector(`.scene-input`),
         this.sceneSaveButton = document.querySelector(`#scene-save-button`),
         this.sceneLoadButton = document.querySelector(`#scene-load-button`),
+        this.chestSwayToggle = document.querySelector(`.chest-sway-toggle`),
+        this.chestStiffnessInput = document.querySelector(`.chest-stiffness-input`),
+        this.chestStiffnessValue = document.querySelector(`.chest-stiffness-value`),
+        this.chestDampingInput = document.querySelector(`.chest-damping-input`),
+        this.chestDampingValue = document.querySelector(`.chest-damping-value`),
         this.fileInput ?.addEventListener(`change`, () => {
             this.fileInput.files !== null && this.fileInput.files.length > 0 && this.handlers.onFilesSelected(this.fileInput.files)
         }), this.motionInput ?.addEventListener(`change`, () => {
@@ -181,6 +191,16 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
             this.handlers.onResetRequested()
         }), this.overlayGyroRecalibrateButton ?.addEventListener(`click`, () => {
             this.handlers.onGyroRecalibrate()
+        }), this.chestSwayToggle ?.addEventListener(`change`, () => {
+            this.handlers.onChestSwayEnabledChanged(this.chestSwayToggle.checked)
+        }), this.chestStiffnessInput ?.addEventListener(`input`, () => {
+            const v = Number(this.chestStiffnessInput.value);
+            if (this.chestStiffnessValue) this.chestStiffnessValue.textContent = v.toFixed(2);
+            this.handlers.onChestStiffnessChanged(v);
+        }), this.chestDampingInput ?.addEventListener(`input`, () => {
+            const v = Number(this.chestDampingInput.value);
+            if (this.chestDampingValue) this.chestDampingValue.textContent = v.toFixed(2);
+            this.handlers.onChestDampingChanged(v);
         })
     } getViewerContainer() {
         return this.viewerContainer
@@ -188,7 +208,11 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
         this.storageUsageElement.textContent = e
     } render(e) {
         let t = e.isLoading || e.isMotionLoading || e.isCameraMotionLoading;
-        sf(this.colorInput, e.settings.backgroundColor), this.loadedModelName.textContent = e.loadedModel ?.fileName ?? ``, this.loadedModelName.hidden = e.loadedModel === null, lf(this.pendingModelLoadName, e.pendingModelLoadName), uf(this.pendingMotionLoadNames, e.pendingMotionLoadNames), uf(this.pendingCameraMotionLoadNames, e.pendingCameraMotionLoadNames), cf(this.modelFileError, e.modelLoadError), cf(this.motionFileError, e.motionLoadError), cf(this.cameraMotionFileError, e.cameraMotionLoadError), this.backgroundModeSelect.value = e.settings.backgroundMode, this.autoRestoreInput.checked = e.settings.isAutoRestoreEnabled, this.screenAwakeInput.checked = e.settings.isScreenAwakeEnabled, this.debugModeInput.checked = e.settings.isDebugModeEnabled, this.shadowInput && (this.shadowInput.checked = e.settings.isShadowEnabled === true), this.physicsSensorInput.checked = e.settings.isPhysicsSensorEnabled, sf(this.gravityMagnitudeInput, String(e.settings.gravityMagnitude)), this.gravityMagnitudeValue.textContent = e.settings.gravityMagnitude.toFixed(1), sf(this.physicsSensorImpulseSensitivityInput, String(e.settings.physicsSensorImpulseSensitivity)), this.physicsSensorImpulseSensitivityInput.disabled = !e.settings.isPhysicsSensorEnabled, this.physicsSensorRecalibrateButton.disabled = !e.settings.isPhysicsSensorEnabled, this.gravityVectorField.hidden = !e.settings.isDebugModeEnabled, this.gravityVectorInput.checked = e.settings.isGravityVectorVisible, this.rotationCenterMarkerInput.checked = e.settings.isRotationCenterMarkerVisible, this.renderMaterialOverrideList(e), this.viewerOverlay.classList.toggle(`viewer-overlay--fullscreen`, e.isFullscreen), this.fullscreenToggleButton.innerHTML = e.isFullscreen ? $d: Qd, this.fullscreenToggleButton.setAttribute(`aria-label`, e.isFullscreen ? Yd: Jd), this.overlayPlaybackButton.innerHTML = e.isPlaying ? tf: ef, this.overlayPlaybackButton.setAttribute(`aria-label`, e.isPlaying ? Ud: Hd), this.fileInput.disabled = e.isLoading, this.motionInput.disabled = e.isLoading || e.loadedModel === null, this.cameraMotionInput.disabled = e.isLoading || e.isCameraMotionLoading, this.cameraControlsPanel.hidden = e.loadedModel === null, this.gyroInput.checked = e.isGyroEnabled;
+        sf(this.colorInput, e.settings.backgroundColor), this.loadedModelName.textContent = e.loadedModel ?.fileName ?? ``, this.loadedModelName.hidden = e.loadedModel === null, lf(this.pendingModelLoadName, e.pendingModelLoadName), uf(this.pendingMotionLoadNames, e.pendingMotionLoadNames), uf(this.pendingCameraMotionLoadNames, e.pendingCameraMotionLoadNames), cf(this.modelFileError, e.modelLoadError), cf(this.motionFileError, e.motionLoadError), cf(this.cameraMotionFileError, e.cameraMotionLoadError), this.backgroundModeSelect.value = e.settings.backgroundMode, this.autoRestoreInput.checked = e.settings.isAutoRestoreEnabled, this.screenAwakeInput.checked = e.settings.isScreenAwakeEnabled, this.debugModeInput.checked = e.settings.isDebugModeEnabled, this.shadowInput && (this.shadowInput.checked = e.settings.isShadowEnabled === true), this.physicsSensorInput.checked = e.settings.isPhysicsSensorEnabled, sf(this.gravityMagnitudeInput, String(e.settings.gravityMagnitude)), this.gravityMagnitudeValue.textContent = e.settings.gravityMagnitude.toFixed(1), sf(this.physicsSensorImpulseSensitivityInput, String(e.settings.physicsSensorImpulseSensitivity)), this.physicsSensorImpulseSensitivityInput.disabled = !e.settings.isPhysicsSensorEnabled, this.physicsSensorRecalibrateButton.disabled = !e.settings.isPhysicsSensorEnabled, this.gravityVectorField.hidden = !e.settings.isDebugModeEnabled, this.gravityVectorInput.checked = e.settings.isGravityVectorVisible, this.rotationCenterMarkerInput.checked = e.settings.isRotationCenterMarkerVisible,
+        this.chestSwayToggle && (this.chestSwayToggle.checked = e.settings.isChestSwayEnabled === true),
+        this.chestDampingInput && sf(this.chestDampingInput, String(e.settings.chestDamping ?? 0.1)),
+        this.chestDampingValue && (this.chestDampingValue.textContent = (e.settings.chestDamping ?? 0.1).toFixed(2)),
+        this.renderMaterialOverrideList(e), this.viewerOverlay.classList.toggle(`viewer-overlay--fullscreen`, e.isFullscreen), this.fullscreenToggleButton.innerHTML = e.isFullscreen ? $d: Qd, this.fullscreenToggleButton.setAttribute(`aria-label`, e.isFullscreen ? Yd: Jd), this.overlayPlaybackButton.innerHTML = e.isPlaying ? tf: ef, this.overlayPlaybackButton.setAttribute(`aria-label`, e.isPlaying ? Ud: Hd), this.fileInput.disabled = e.isLoading, this.motionInput.disabled = e.isLoading || e.loadedModel === null, this.cameraMotionInput.disabled = e.isLoading || e.isCameraMotionLoading, this.cameraControlsPanel.hidden = e.loadedModel === null, this.gyroInput.checked = e.isGyroEnabled;
         let n = e.settings.gyroMode;
         for (let t of this.gyroModeInputs) t.checked = t.value === n, t.disabled = !e.isGyroEnabled;
         sf(this.gyroViewpointSensitivityInput, String(e.settings.gyroViewpointSensitivity)), sf(this.gyroModelCenterSensitivityInput, String(e.settings.gyroModelCenterSensitivity)), this.gyroViewpointSensitivityInput.disabled = !e.isGyroEnabled, this.gyroModelCenterSensitivityInput.disabled = !e.isGyroEnabled, this.gyroRecalibrateButton.disabled = !e.isGyroEnabled, this.renderTrackingBoneSelect(e);
@@ -731,6 +755,22 @@ var loadedModels = [], vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = ne
         })
     }, onPhysicsSensorRecalibrate: () => {
         Q.recalibratePhysicsSensor()
+    }, onChestSwayEnabledChanged: e => {
+        const s = Z.getState().settings;
+        Q.setChestSwayEnabled(e, s.chestDamping ?? 0.1);
+        Z.setState({
+            settings: {
+...s, isChestSwayEnabled: e
+            }
+        })
+    }, onChestDampingChanged: e => {
+        const s = Z.getState().settings;
+        if (s.isChestSwayEnabled) Q.setChestSwayEnabled(true, e);
+        Z.setState({
+            settings: {
+...s, chestDamping: e
+            }
+        })
     }, onGravityVectorVisibilityChanged: e => {
         Z.setState({
             settings: {
