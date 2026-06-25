@@ -1102,6 +1102,10 @@ async function Tf() {
         const targetModel = loadedModels.find(m => m.model.uuid === activeModelId);
         if (targetModel) {
             targetModel.loadedMotions = targetModel.loadedMotions || [];
+            // 安全対策：既存のモーションをすべて非アクティブにする
+            for (let mo of targetModel.loadedMotions) {
+                mo.isActive = false;
+            }
             targetModel.loadedMotions.push(...e.map(m => ({ fileName: m.fileName, isActive: true })));
             
             Z.setState({
@@ -1469,7 +1473,7 @@ async function Nf() {
         if (!Ff(e, `loadPmxFromCachedBlobs`)) {
             n.dispose();
             return
-        } _f !== null && _f.dispose(), _f = n, $.setModel(n.model), Q.setModel(n.model), Wf(), Gf(), applyShadowEnabled(Z.getState().settings.isShadowEnabled === true), Z.getState().settings.isDebugModeEnabled && $.dumpMaterialDetails();
+        } _f !== null && _f.dispose(), _f = n, loadedModels = [n], $.setModel(n.model), Q.setModel(n.model), Wf(), Gf(), applyShadowEnabled(Z.getState().settings.isShadowEnabled === true), Z.getState().settings.isDebugModeEnabled && $.dumpMaterialDetails();
         let {
             materialVisibilityOverrides: r, suspiciousMaterials: i
         } = Vf(), a = gu(n.model), o = Hf(a);
@@ -1495,16 +1499,33 @@ async function Nf() {
         } Q.setLooping(t.isLooping), Q.setPlaying(!1);
         for (let e of c) Q.setMotionActive(e.clip, l.has(e.fileName));
         if (Q.setActiveCameraMotion(d ?.clip ?? null), !Ff(e, `beforeStoreSetState`)) return ;
+        
+        const restoredModelObj = {
+            id: n.model.uuid,
+            fileName: n.fileName,
+            originalFileName: n.originalFileName,
+            isActive: true,
+            position: { x: n.model.position.x, y: n.model.position.y, z: n.model.position.z },
+            rotation: {
+                x: n.model.rotation.x * 180 / Math.PI,
+                y: n.model.rotation.y * 180 / Math.PI,
+                z: n.model.rotation.z * 180 / Math.PI
+            },
+            isShadowEnabled: n.isShadowEnabled !== false
+        };
+        n.loadedMotions = c.map(e => ({
+            fileName: e.fileName, isActive: t.activeModelVmdFileNames.includes(e.fileName)
+        }));
+
         If(`restoreSessionOnStartup:success`, [`isLoading`, `isMotionLoading`, `isCameraMotionLoading`, `isPlaying`, `isLooping`, `hasMotion`, `loadedModel`, `loadedMotions`, `loadedCameraMotions`, `activeCameraMotionFileName`, `trackingBoneName`, `settings.trackingBoneName`]), Z.setState({
             isLoading: !1, isMotionLoading: !1, isCameraMotionLoading: !1, isPlaying: !1, isLooping: t.isLooping, hasMotion: c.length > 0, loadedModel: {
                 fileName: n.fileName, object: n.model, availableBoneNames: a
-            }, loadedMotions: c.map(e => ({
-                fileName: e.fileName, isActive: t.activeModelVmdFileNames.includes(e.fileName)
-            })), loadedCameraMotions: u.map(e => ({
+            }, loadedMotions: n.loadedMotions, loadedCameraMotions: u.map(e => ({
                 fileName: e.fileName
             })), suspiciousMaterials: i, materialVisibilityOverrides: r, activeCameraMotionFileName: u.some(e => e.fileName === t.activeCameraMotionFileName) ? t.activeCameraMotionFileName: null, trackingBoneName: o, settings: {
 ...Z.getState().settings, trackingBoneName: o
-            }
+            },
+            models: [restoredModelObj]
         });
         if (window.webmmdUI && typeof window.webmmdUI.setSelectedAssets === "function") {
             const activeMotions = c.filter(e => l.has(e.fileName)).map(e => e.fileName);

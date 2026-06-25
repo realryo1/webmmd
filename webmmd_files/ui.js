@@ -373,12 +373,10 @@ if ("serviceWorker" in navigator) {
       return;
     }
 
-    // 前のモーション状態をクリア（空のファイルリスト）
-    const clearTransfer = new DataTransfer();
-    motionInput.files = clearTransfer.files;
-    motionInput.dispatchEvent(new Event("change", { bubbles: true }));
+    // valueを空にしておくことで、再度同じファイルを読み込む際にもchangeイベントが確実に発火するようにする
+    motionInput.value = "";
 
-    // その後、新しいモーションを設定
+    // 新しいモーションを設定してディスパッチ
     setFileInputAndDispatch(motionInput, [selectedMotion]);
     updateStatus(`モーションを読み込みました: ${selectedMotion.name}`);
   };
@@ -423,6 +421,7 @@ if ("serviceWorker" in navigator) {
     files,
     emptyText,
     selectedPath,
+    radioGroupName,
     onSelect,
   }) => {
     listNode.replaceChildren();
@@ -445,11 +444,11 @@ if ("serviceWorker" in navigator) {
 
       const input = document.createElement("input");
       input.type = "radio";
-      input.name = "assets-motion-choice";
+      input.name = radioGroupName;
       input.checked = relativeLower === selectedLower;
       input.title = relativePath;
-      input.addEventListener("change", () => {
-        if (!input.checked) return;
+      input.setAttribute("autocomplete", "off");
+      input.addEventListener("click", () => {
         onSelect(relativePath);
       });
 
@@ -468,6 +467,7 @@ if ("serviceWorker" in navigator) {
     files,
     emptyText,
     selectedPath,
+    radioGroupName,
     onSelect,
   }) => {
     listNode.replaceChildren();
@@ -490,11 +490,11 @@ if ("serviceWorker" in navigator) {
 
       const input = document.createElement("input");
       input.type = "radio";
-      input.name = "assets-model-choice";
+      input.name = radioGroupName;
       input.checked = relativeLower === selectedLower;
       input.title = relativePath;
-      input.addEventListener("change", () => {
-        if (!input.checked) return;
+      input.setAttribute("autocomplete", "off");
+      input.addEventListener("click", () => {
         onSelect(relativePath);
       });
 
@@ -620,6 +620,9 @@ if ("serviceWorker" in navigator) {
       const motionListNode = document.getElementById("assets-motion-list");
       if (!modelListNode || !motionListNode) return;
 
+      const modelRadioGroupId = "assets-model-choice-" + Date.now();
+      const motionRadioGroupId = "assets-motion-choice-" + Date.now();
+
       if (!selectedAssetsModelPath) {
         selectedAssetsMotionPath = "";
       } else if (!selectedAssetsMotionPath) {
@@ -657,6 +660,7 @@ if ("serviceWorker" in navigator) {
         files: indexedModelFiles,
         emptyText: modelEmptyText,
         selectedPath: selectedAssetsModelPath,
+        radioGroupName: modelRadioGroupId,
         onSelect: (path) => {
           selectedAssetsModelPath = toLower(path);
           loadModelByPath(path);
@@ -667,6 +671,7 @@ if ("serviceWorker" in navigator) {
         files: indexedMotionFiles,
         emptyText: motionEmptyText,
         selectedPath: selectedAssetsMotionPath,
+        radioGroupName: motionRadioGroupId,
         onSelect: (path) => {
           selectedAssetsMotionPath = toLower(path);
           localStorage.setItem(ASSETS_SELECTED_MOTION_PATH_KEY, path);
@@ -680,10 +685,10 @@ if ("serviceWorker" in navigator) {
       initialPoseRow.className = "motion-entry";
       const initialPoseRadio = document.createElement("input");
       initialPoseRadio.type = "radio";
-      initialPoseRadio.name = "assets-motion-choice";
+      initialPoseRadio.name = motionRadioGroupId;
       initialPoseRadio.checked = !selectedAssetsMotionPath;
-      initialPoseRadio.addEventListener("change", () => {
-        if (!initialPoseRadio.checked) return;
+      initialPoseRadio.setAttribute("autocomplete", "off");
+      initialPoseRadio.addEventListener("click", () => {
         selectedAssetsMotionPath = "";
         localStorage.removeItem(ASSETS_SELECTED_MOTION_PATH_KEY);
         stopCurrentAudio();
