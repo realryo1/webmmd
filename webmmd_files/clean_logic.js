@@ -554,6 +554,33 @@ async function selectPmxFile(pmxFiles) {
   });
 }
 
+function disposeModel(parent) {
+  parent.traverse(child => {
+    if (child.isMesh || child.isSkinnedMesh) {
+      if (child.geometry) {
+        child.geometry.dispose();
+      }
+      if (child.material) {
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const mat of materials) {
+          if (!mat) continue;
+          
+          for (const key of Object.keys(mat)) {
+            const val = mat[key];
+            if (val && typeof val === 'object' && val.isTexture) {
+              val.dispose();
+            }
+          }
+          mat.dispose();
+        }
+      }
+      if (child.isSkinnedMesh && child.skeleton) {
+        child.skeleton.dispose();
+      }
+    }
+  });
+}
+
 async function parseModelFiles(normalizedFiles) {
   const pmxFiles = normalizedFiles.filter(f => f.name.endsWith('.pmx'));
   const pmxFile = await selectPmxFile(pmxFiles);
@@ -582,7 +609,10 @@ async function parseModelFiles(normalizedFiles) {
         path: f.path,
         blob: f.file || f.blob
       })),
-      dispose: () => revokeAllUrls(resourceMap)
+      dispose: () => {
+        disposeModel(mmdMesh);
+        revokeAllUrls(resourceMap);
+      }
     };
   } catch (err) {
     revokeAllUrls(resourceMap);

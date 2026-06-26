@@ -370,6 +370,10 @@ class MMDAnimationHelper {
 
 			if ( this.meshes[ i ] === mesh ) {
 
+				const obj = this.objects.get( mesh );
+				if ( obj && obj.physics ) {
+					obj.physics.dispose();
+				}
 				this.objects.delete( mesh );
 				found = true;
 
