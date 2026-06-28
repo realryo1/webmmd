@@ -570,3 +570,22 @@ select {
         height: 40vh;
     }
 }
+
+/* VRセッション中のオーバーレイ表示制御 */
+.viewer.xr-active .viewer-overlay,
+.viewer:xr-overlay .viewer-overlay {
+    z-index: 1000 !important;
+    flex-direction: row !important;
+    inset: auto auto 30px 30px !important;
+    display: flex !important;
+}
+
+.viewer.xr-active .viewer-overlay .overlay-button,
+.viewer:xr-overlay .viewer-overlay .overlay-button {
+    display: grid !important;
+}
+
+.viewer.xr-active,
+.viewer:xr-overlay {
+    background: transparent !important;
+}

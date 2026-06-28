@@ -70,9 +70,7 @@ let _lastTime = 0;
 /** セッションイベントリスナー多重登録防止フラグ */
 let _sessionListenersAttached = false;
 
-/** VR終了用の3DUIボタンと当たり判定用のオブジェクト */
-let _vrQuitButton = null;
-let _raycaster = null;
+
 let _savedToneMapping = 0;
 let _savedShadowMapEnabled = false;
 
@@ -148,8 +146,10 @@ async function _onVrButtonClick() {
     // セッション開始
     _isRequestingSession = true;
     try {
+      const viewerElement = document.querySelector('.viewer');
       const newSession = await navigator.xr.requestSession('immersive-vr', {
-        optionalFeatures: ['local-floor', 'bounded-floor'],
+        optionalFeatures: ['local-floor', 'bounded-floor', 'dom-overlay'],
+        domOverlay: { root: viewerElement }
       });
       await _renderer.xr.setSession(newSession);
     } catch (e) {
@@ -160,63 +160,7 @@ async function _onVrButtonClick() {
   }
 }
 
-/**
- * VR終了用の3DUIボタンを作成する
- */
-function _createQuitButton() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  
-  // 背景（半透明の赤）
-  ctx.fillStyle = 'rgba(200, 30, 30, 0.85)';
-  ctx.fillRect(0, 0, 256, 128);
-  
-  // 枠線
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 6;
-  ctx.strokeRect(3, 3, 250, 122);
-  
-  // テキスト
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 36px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('VR 終了', 128, 64);
-  
-  const texture = new CanvasTexture(canvas);
-  const geometry = new PlaneGeometry(0.4, 0.2);
-  const material = new MeshBasicMaterial({ map: texture, transparent: true });
-  const mesh = new Mesh(geometry, material);
-  
-  // プレイヤーの目の前に配置
-  mesh.position.set(0, 1.2, -1.5);
-  return mesh;
-}
 
-/**
- * コントローラのトリガーが引かれた際の判定処理
- */
-function _onSelect(event) {
-  if (!_vrQuitButton) return;
-
-  const controller = event.target;
-  const raycaster = _raycaster || new Raycaster();
-  _raycaster = raycaster;
-  
-  const matrix = controller.matrixWorld;
-  const origin = new Vector3().setFromMatrixPosition(matrix);
-  const direction = new Vector3(0, 0, -1).applyMatrix4(new Matrix4().extractRotation(matrix)).normalize();
-  
-  raycaster.set(origin, direction);
-  
-  const intersects = raycaster.intersectObject(_vrQuitButton);
-  if (intersects.length > 0) {
-    console.log('[xr] VR Quit button clicked, ending VR session');
-    _onVrButtonClick();
-  }
-}
 
 /**
  * XR セッション開始時の処理。
@@ -229,6 +173,12 @@ function _onSessionStart() {
   if (_vrButton) {
     _vrButton.classList.add('overlay-button--active');
     _vrButton.setAttribute('aria-label', 'VR終了');
+  }
+
+  // DOM Overlay 用に .viewer に .xr-active クラスを追加
+  const viewerElement = document.querySelector('.viewer');
+  if (viewerElement) {
+    viewerElement.classList.add('xr-active');
   }
 
   // カメラ状態を保存
@@ -251,27 +201,11 @@ function _onSessionStart() {
   // コントローラ grip をリグに追加
   _setupControllerGrips();
 
-  // コントローラのトリガーイベント登録
+  // コントローラをリグに追加
   const controllerL = _renderer.xr.getController(0);
   const controllerR = _renderer.xr.getController(1);
-  controllerL.addEventListener('select', _onSelect);
-  controllerR.addEventListener('select', _onSelect);
-  
   _playerRig.add(controllerL);
   _playerRig.add(controllerR);
-
-  const lineGeometry = new BufferGeometry();
-  lineGeometry.setAttribute('position', new Float32BufferAttribute([0, 0, 0, 0, 0, -2], 3));
-  const lineMaterial = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
-  const line = new Line(lineGeometry, lineMaterial);
-  line.name = 'ray';
-
-  controllerL.add(line.clone());
-  controllerR.add(line.clone());
-
-  // VR終了ボタンを作成してリグに追加
-  _vrQuitButton = _createQuitButton();
-  _playerRig.add(_vrQuitButton);
 
   // 通常のレンダーループを停止し、XRレンダーループを開始
   if (_viewer) {
@@ -296,31 +230,22 @@ function _onSessionEnd() {
     _vrButton.setAttribute('aria-label', 'VRモード');
   }
 
-  // コントローラからイベントリスナー解除
+  // DOM Overlay 用に .viewer から .xr-active クラスを削除
+  const viewerElement = document.querySelector('.viewer');
+  if (viewerElement) {
+    viewerElement.classList.remove('xr-active');
+  }
+
+  // コントローラをリグから除去
   const controllerL = _renderer.xr.getController(0);
   const controllerR = _renderer.xr.getController(1);
-  controllerL.removeEventListener('select', _onSelect);
-  controllerR.removeEventListener('select', _onSelect);
-
-  // コントローラオブジェクトと光線をリグ/オブジェクトから除去
   if (_playerRig) {
     _playerRig.remove(controllerL);
     _playerRig.remove(controllerR);
   }
-  controllerL.remove(controllerL.getObjectByName('ray'));
-  controllerR.remove(controllerR.getObjectByName('ray'));
 
   // コントローラモデルを片付ける
   _cleanupControllerGrips();
-
-  // VR終了ボタンの破棄
-  if (_vrQuitButton) {
-    if (_playerRig) _playerRig.remove(_vrQuitButton);
-    _vrQuitButton.geometry.dispose();
-    _vrQuitButton.material.map.dispose();
-    _vrQuitButton.material.dispose();
-    _vrQuitButton = null;
-  }
 
   // playerRig をシーンから除去
   if (_playerRig) {
