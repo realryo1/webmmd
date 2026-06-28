@@ -147,10 +147,18 @@ async function _onVrButtonClick() {
     _isRequestingSession = true;
     try {
       const viewerElement = document.querySelector('.viewer');
-      const newSession = await navigator.xr.requestSession('immersive-vr', {
-        optionalFeatures: ['local-floor', 'bounded-floor', 'dom-overlay'],
-        domOverlay: { root: viewerElement }
-      });
+      let newSession;
+      try {
+        newSession = await navigator.xr.requestSession('immersive-vr', {
+          optionalFeatures: ['local-floor', 'bounded-floor', 'dom-overlay'],
+          domOverlay: { root: viewerElement }
+        });
+      } catch (e) {
+        console.warn('[xr] requestSession with dom-overlay failed, retrying without dom-overlay...', e);
+        newSession = await navigator.xr.requestSession('immersive-vr', {
+          optionalFeatures: ['local-floor', 'bounded-floor']
+        });
+      }
       await _renderer.xr.setSession(newSession);
     } catch (e) {
       console.warn('[xr] requestSession failed', e);
