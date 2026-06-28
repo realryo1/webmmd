@@ -1,4 +1,4 @@
-const CACHE_NAME = "webmmd-cache-v29";
+const CACHE_NAME = "webmmd-cache-v30";
 
 const APP_SHELL = [
   "./",
@@ -15,10 +15,7 @@ const APP_SHELL = [
   "./webmmd_files/three.module.js",
   "./webmmd_files/NURBSCurve.js",
   "./webmmd_files/NURBSUtils.js",
-  "./webmmd_files/FBXLoader.js",
-  "./webmmd_files/fflate.module.js",
   "./webmmd_files/xr.js",
-  "./webmmd_files/quest2_Controller.fbx",
   "./webmmd_files/OrbitControls.js",
   "./webmmd_files/MMDLoader.js",
   "./webmmd_files/MMDAnimationHelper.js",

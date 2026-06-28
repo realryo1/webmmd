@@ -13,7 +13,6 @@
  *   attachXRSessionListeners(renderer);
  */
 
-import { FBXLoader } from './FBXLoader.js';
 import {
   Object3D,
   Vector3,
@@ -21,6 +20,7 @@ import {
   Euler,
   Raycaster,
   PlaneGeometry,
+  BoxGeometry,
   CanvasTexture,
   MeshBasicMaterial,
   Mesh,
@@ -119,8 +119,8 @@ export function initXR({ renderer, scene, getCamera, vrButton, viewer }) {
     _disableVrButton('確認失敗');
   });
 
-  // FBX コントローラモデルを事前ロード
-  _preloadControllerModels();
+  // コントローラモデルを生成
+  _createControllerModels();
 }
 
 
@@ -421,67 +421,15 @@ function _cleanupControllerGrips() {
 // FBX コントローラモデルのプリロード
 // -------------------------------------------------------
 
-function _preloadControllerModels() {
-  const loader = new FBXLoader();
+function _createControllerModels() {
+  const geometry = new BoxGeometry(0.05, 0.05, 0.08); // 幅5cm, 高さ5cm, 奥行き8cm
+  const materialL = new MeshBasicMaterial({ color: 0xff0000 }); // 左: 赤
+  const materialR = new MeshBasicMaterial({ color: 0x0000ff }); // 右: 青
 
-  // xr.js から quest2_Controller.fbx への相対パスを解決
-  const url = new URL('./quest2_Controller.fbx', import.meta.url).href;
+  _modelL = new Mesh(geometry, materialL);
+  _modelR = new Mesh(geometry, materialR);
 
-  loader.load(
-    url,
-    (fbx) => {
-      // 左右のノードを名前で検索
-      let nodeL = null;
-      let nodeR = null;
-      fbx.traverse((child) => {
-        if (child.name === 'left_quest2_controller_world')  nodeL = child;
-        if (child.name === 'right_quest2_controller_world') nodeR = child;
-      });
-
-      if (!nodeL) {
-        console.warn('[xr] left_quest2_controller_world not found, using whole model');
-        nodeL = fbx;
-      }
-      if (!nodeR) {
-        console.warn('[xr] right_quest2_controller_world not found, using whole model clone');
-        nodeR = fbx.clone();
-      }
-
-      // 左コントローラ用クローン
-      _modelL = nodeL.clone ? nodeL.clone() : nodeL;
-      _applyControllerModelCorrection(_modelL, 'left');
-
-      // 右コントローラ用クローン (nodeL と nodeR が別オブジェクトでも clone)
-      _modelR = nodeR.clone ? nodeR.clone() : nodeR;
-      _applyControllerModelCorrection(_modelR, 'right');
-
-      console.log('[xr] controller models loaded');
-
-      // セッション中なら即アタッチ
-      if (_isXRActive) {
-        if (_gripL && _modelL) _gripL.add(_modelL);
-        if (_gripR && _modelR) _gripR.add(_modelR);
-      }
-    },
-    undefined,
-    (err) => {
-      console.warn('[xr] FBX load error, controllers invisible', err);
-    }
-  );
-}
-
-/**
- * grip 座標系に合わせてコントローラモデルを補正する。
- * FBX のスケールは通常 cm 単位なので 0.01 でメートルに変換。
- *
- * @param {Object3D} model
- * @param {'left'|'right'} hand
- */
-function _applyControllerModelCorrection(model, hand) {
-  // FBX は通常 cm スケール → m に変換
-  model.scale.setScalar(0.01);
-  // grip 空間の初期向きに合わせた補正 (FBX モデルの実際の向きに合わせて調整可)
-  model.rotation.set(0, 0, 0);
+  console.log('[xr] controller cube models created');
 }
 
 // -------------------------------------------------------
