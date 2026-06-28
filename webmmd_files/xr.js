@@ -33,10 +33,11 @@ import {
 // -------------------------------------------------------
 // 定数
 // -------------------------------------------------------
-const MOVE_SPEED     = 2.0;  // m/s 前後左右
-const VERTICAL_SPEED = 1.0;  // m/s 上下
+const MOVE_SPEED     = 0.5;  // m/s 前後左右
+const VERTICAL_SPEED = 0.3;  // m/s 上下
 const ROTATION_SPEED = 1.5;  // rad/s 左右回転
 const DEADZONE       = 0.15; // スティックデッドゾーン
+const VR_SCALE       = 12.5; // MMDの1単位(8cm)を1メートルに変換するためのスケール (1 / 0.08)
 
 // -------------------------------------------------------
 // モジュール内状態
@@ -281,6 +282,7 @@ function _onSessionStart() {
   _playerRig = new Object3D();
   _playerRig.name = 'playerRig';
   _playerRig.position.copy(_savedCameraPos);
+  _playerRig.scale.setScalar(VR_SCALE);
   _scene.add(_playerRig);
 
   // カメラを playerRig の子にする
@@ -527,8 +529,8 @@ function _processInput(delta) {
     _rotateRig(rotateY, delta);
     _playerRig.updateMatrixWorld();
   }
-  if (goUp)   _playerRig.position.y += VERTICAL_SPEED * delta;
-  if (goDown) _playerRig.position.y -= VERTICAL_SPEED * delta;
+  if (goUp)   _playerRig.position.y += VERTICAL_SPEED * VR_SCALE * delta;
+  if (goDown) _playerRig.position.y -= VERTICAL_SPEED * VR_SCALE * delta;
 }
 
 /**
@@ -552,7 +554,7 @@ function _moveHorizontal(x, y, delta) {
 
   // 移動方向ベクトルを yaw で回転
   _tmpDir.set(x, 0, y).applyQuaternion(_tmpQuat);
-  _tmpDir.normalize().multiplyScalar(MOVE_SPEED * delta);
+  _tmpDir.normalize().multiplyScalar(MOVE_SPEED * VR_SCALE * delta);
 
   _playerRig.position.x += _tmpDir.x;
   _playerRig.position.z += _tmpDir.z;
