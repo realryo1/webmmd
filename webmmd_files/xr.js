@@ -198,6 +198,9 @@ function _onSessionStart() {
   _playerRig.position.copy(_savedCameraPos);
   _scene.add(_playerRig);
 
+  // カメラを playerRig の子にする
+  _playerRig.add(cam);
+
   // コントローラ grip をリグに追加
   _setupControllerGrips();
 
@@ -247,6 +250,14 @@ function _onSessionEnd() {
   // コントローラモデルを片付ける
   _cleanupControllerGrips();
 
+  // カメラを元の親 (cameraPivot) またはシーンに戻す
+  const cam = _getCamera();
+  if (_viewer && _viewer.cameraPivot) {
+    _viewer.cameraPivot.add(cam);
+  } else {
+    _scene.add(cam);
+  }
+
   // playerRig をシーンから除去
   if (_playerRig) {
     _scene.remove(_playerRig);
@@ -259,7 +270,6 @@ function _onSessionEnd() {
 
   // カメラを元に戻す
   if (_savedCameraPos && _savedCameraQuat) {
-    const cam = _getCamera();
     cam.position.copy(_savedCameraPos);
     cam.quaternion.copy(_savedCameraQuat);
   }
@@ -394,9 +404,9 @@ function _processInput(delta) {
       axisX = Math.abs(ax) > DEADZONE ? ax : 0;
       axisY = Math.abs(ay) > DEADZONE ? ay : 0;
 
-      // Meta Quest 2: Y=buttons[4] (上昇), X=buttons[3] (下降)
-      goUp   = !!(gp.buttons[4]?.pressed);
-      goDown = !!(gp.buttons[3]?.pressed);
+      // Meta Quest 2: Y=buttons[5] (上昇), X=buttons[4] (下降)
+      goUp   = !!(gp.buttons[5]?.pressed);
+      goDown = !!(gp.buttons[4]?.pressed);
     }
   }
 
