@@ -525,6 +525,7 @@ function _processInput(delta) {
   }
   if (rotateY !== 0) {
     _rotateRig(rotateY, delta);
+    _playerRig.updateMatrixWorld();
   }
   if (goUp)   _playerRig.position.y += VERTICAL_SPEED * delta;
   if (goDown) _playerRig.position.y -= VERTICAL_SPEED * delta;
@@ -538,9 +539,10 @@ function _processInput(delta) {
  * @param {number} delta  フレーム時間 (秒)
  */
 function _moveHorizontal(x, y, delta) {
-  // XR カメラの現在向きを取得
-  const xrCam = _renderer.xr.getCamera();
-  xrCam.getWorldQuaternion(_tmpQuat);
+  // 元のカメラ (this.renderCamera) の現在向きを取得
+  // (元のカメラは _playerRig の子オブジェクトになっているため、_playerRig の回転も合成されます)
+  const cam = _getCamera();
+  cam.getWorldQuaternion(_tmpQuat);
 
   // yaw のみ取り出す (pitch/roll を無視して水平移動)
   _tmpEuler.setFromQuaternion(_tmpQuat, 'YXZ');
