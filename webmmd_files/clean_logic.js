@@ -2447,6 +2447,11 @@ export class pu {
     this.renderCamera.aspect = w / h;
     this.dummyCamera.updateProjectionMatrix();
     this.renderCamera.updateProjectionMatrix();
+
+    if (this.renderer.xr.enabled && this.renderer.xr.isPresenting) {
+      return;
+    }
+
     this.renderer.setSize(w, h, false);
   }
 

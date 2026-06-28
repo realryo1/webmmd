@@ -194,11 +194,9 @@ function _onSessionStart() {
   _savedCameraPos  = cam.position.clone();
   _savedCameraQuat = cam.quaternion.clone();
 
-  // 黒いもや・バグを回避するためトーンマッピングとシャドウを一時無効化
+  // 黒いもや・バグを回避するためトーンマッピングを一時無効化（GLエラー防止のためシャドウ無効化は削除）
   _savedToneMapping = _renderer.toneMapping;
-  _savedShadowMapEnabled = _renderer.shadowMap.enabled;
   _renderer.toneMapping = 0;
-  _renderer.shadowMap.enabled = false;
 
   // playerRig をシーンに追加
   _playerRig = new Object3D();
@@ -272,9 +270,8 @@ function _onSessionEnd() {
     _playerRig = null;
   }
 
-  // トーンマッピングとシャドウを復元
+  // トーンマッピングを復元
   _renderer.toneMapping = _savedToneMapping;
-  _renderer.shadowMap.enabled = _savedShadowMapEnabled;
 
   // カメラを元に戻す
   if (_savedCameraPos && _savedCameraQuat) {
@@ -306,8 +303,8 @@ function _xrRenderLoop(timestamp, frame) {
     _viewer.frameUpdater.update(delta);
   }
 
-  // レンダリング (XR カメラで自動レンダリングされる)
-  _renderer.render(_scene, _renderer.xr.getCamera());
+  // レンダリング (元のカメラを渡すことで WebXRManager が親リグの行列を合成して描画します)
+  _renderer.render(_scene, _getCamera());
 }
 
 
