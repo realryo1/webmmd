@@ -926,7 +926,9 @@ if (vrButton) {
         scene: $.scene,
         getCamera: () => $.getCamera(),
         vrButton: vrButton,
-        viewer: $
+        viewer: $,
+        applyShadowEnabled: applyShadowEnabled,
+        getShadowEnabled: () => Z.getState().settings.isShadowEnabled === true
     });
     attachXRSessionListeners($.renderer);
 }

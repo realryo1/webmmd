@@ -576,13 +576,24 @@ select {
 .viewer:xr-overlay .viewer-overlay {
     z-index: 1000 !important;
     flex-direction: row !important;
-    inset: auto auto 30px 30px !important;
+    position: fixed !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: 30px !important;
+    left: 30px !important;
     display: flex !important;
 }
 
 .viewer.xr-active .viewer-overlay .overlay-button,
 .viewer:xr-overlay .viewer-overlay .overlay-button {
     display: grid !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: #14171be6 !important;
+}
+
+.viewer.xr-active .viewer-loading {
+    display: none !important;
 }
 
 .viewer.xr-active,

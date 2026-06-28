@@ -35,6 +35,7 @@ import {
 // -------------------------------------------------------
 const MOVE_SPEED     = 2.0;  // m/s 前後左右
 const VERTICAL_SPEED = 1.0;  // m/s 上下
+const ROTATION_SPEED = 1.5;  // rad/s 左右回転
 const DEADZONE       = 0.15; // スティックデッドゾーン
 
 // -------------------------------------------------------
@@ -45,6 +46,8 @@ let _scene      = null;
 let _getCamera  = null;
 let _vrButton   = null;
 let _viewer     = null;
+let _applyShadowEnabled = null;
+let _getShadowEnabled   = null;
 
 /** VR 中の移動用親 Object3D */
 let _playerRig  = null;
@@ -73,6 +76,8 @@ let _sessionListenersAttached = false;
 
 let _savedToneMapping = 0;
 let _savedShadowMapEnabled = false;
+/** VR開始前のシーン背景色 (WebXRコンポジタとの干渉を防ぐために保存) */
+let _savedSceneBackground = null;
 
 // -------------------------------------------------------
 // 公開 API
@@ -88,13 +93,17 @@ let _savedShadowMapEnabled = false;
  * @param {() => THREE.Camera}  opts.getCamera
  * @param {HTMLButtonElement}   opts.vrButton
  * @param {object}              opts.viewer
+ * @param {(enabled: boolean) => void} opts.applyShadowEnabled
+ * @param {() => boolean}       opts.getShadowEnabled
  */
-export function initXR({ renderer, scene, getCamera, vrButton, viewer }) {
+export function initXR({ renderer, scene, getCamera, vrButton, viewer, applyShadowEnabled, getShadowEnabled }) {
   _renderer  = renderer;
   _scene     = scene;
   _getCamera = getCamera;
   _vrButton  = vrButton;
   _viewer    = viewer;
+  _applyShadowEnabled = applyShadowEnabled;
+  _getShadowEnabled   = getShadowEnabled;
 
   // WebXR を有効化
   renderer.xr.enabled = true;
@@ -173,6 +182,9 @@ async function _onVrButtonClick() {
 /**
  * XR セッション開始時の処理。
  */
+/** VRセッション中にインラインスタイルを変更した要素と元値の復元情報 */
+let _savedInlineStyles = [];
+
 function _onSessionStart() {
   _isXRActive = true;
   _lastTime = 0;
@@ -189,14 +201,56 @@ function _onSessionStart() {
     viewerElement.classList.add('xr-active');
   }
 
+  // -------------------------------------------------------
+  // VR中のDOM要素干渉を防止するためインラインスタイルを直接操作
+  // (CSSキャッシュに依存せず確実に適用する)
+  // -------------------------------------------------------
+  _savedInlineStyles = [];
+
+  // viewer-loading を完全非表示
+  const viewerLoading = document.querySelector('.viewer-loading');
+  if (viewerLoading) {
+    _savedInlineStyles.push({ el: viewerLoading, prop: 'display', old: viewerLoading.style.display });
+    _savedInlineStyles.push({ el: viewerLoading, prop: 'visibility', old: viewerLoading.style.visibility });
+    viewerLoading.style.setProperty('display', 'none', 'important');
+    viewerLoading.style.setProperty('visibility', 'hidden', 'important');
+  }
+
+  // overlay-button の backdrop-filter を除去し、背景を不透明に変更
+  const overlayButtons = document.querySelectorAll('.overlay-button');
+  overlayButtons.forEach(btn => {
+    _savedInlineStyles.push({ el: btn, prop: 'backdropFilter', old: btn.style.backdropFilter });
+    _savedInlineStyles.push({ el: btn, prop: 'webkitBackdropFilter', old: btn.style.webkitBackdropFilter });
+    _savedInlineStyles.push({ el: btn, prop: 'background', old: btn.style.background });
+    btn.style.setProperty('backdrop-filter', 'none', 'important');
+    btn.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+    btn.style.setProperty('background', '#14171be6', 'important');
+  });
+
+  // viewer 自体の背景を透明に
+  if (viewerElement) {
+    _savedInlineStyles.push({ el: viewerElement, prop: 'background', old: viewerElement.style.background });
+    viewerElement.style.setProperty('background', 'transparent', 'important');
+  }
+
   // カメラ状態を保存
   const cam = _getCamera();
   _savedCameraPos  = cam.position.clone();
   _savedCameraQuat = cam.quaternion.clone();
 
-  // 黒いもや・バグを回避するためトーンマッピングを一時無効化（GLエラー防止のためシャドウ無効化は削除）
+  // VRコンポジタとのアルファ合成干渉を防ぐため scene.background を null に設定
+  // (背景色が残っているとフレームバッファ境界がグリッドに半透明矩形として現れる)
+  _savedSceneBackground = _scene.background;
+  _scene.background = null;
+
+  // トーンマッピングとシャドウを一時無効化
   _savedToneMapping = _renderer.toneMapping;
+  _savedShadowMapEnabled = _renderer.shadowMap.autoUpdate;
   _renderer.toneMapping = 0;
+  _renderer.shadowMap.autoUpdate = false;
+  if (_applyShadowEnabled) {
+    _applyShadowEnabled(false);
+  }
 
   // playerRig をシーンに追加
   _playerRig = new Object3D();
@@ -245,6 +299,18 @@ function _onSessionEnd() {
     viewerElement.classList.remove('xr-active');
   }
 
+  // -------------------------------------------------------
+  // VR中に変更したインラインスタイルを復元
+  // -------------------------------------------------------
+  _savedInlineStyles.forEach(({ el, prop, old }) => {
+    if (old) {
+      el.style[prop] = old;
+    } else {
+      el.style.removeProperty(prop.replace(/([A-Z])/g, '-$1').toLowerCase());
+    }
+  });
+  _savedInlineStyles = [];
+
   // コントローラをリグから除去
   const controllerL = _renderer.xr.getController(0);
   const controllerR = _renderer.xr.getController(1);
@@ -270,8 +336,16 @@ function _onSessionEnd() {
     _playerRig = null;
   }
 
-  // トーンマッピングを復元
+  // scene.background を復元
+  _scene.background = _savedSceneBackground;
+  _savedSceneBackground = null;
+
+  // トーンマッピングとシャドウを復元
   _renderer.toneMapping = _savedToneMapping;
+  _renderer.shadowMap.autoUpdate = _savedShadowMapEnabled;
+  if (_applyShadowEnabled && _getShadowEnabled) {
+    _applyShadowEnabled(_getShadowEnabled());
+  }
 
   // カメラを元に戻す
   if (_savedCameraPos && _savedCameraQuat) {
@@ -396,6 +470,7 @@ function _processInput(delta) {
   let axisY  = 0;
   let goUp   = false;
   let goDown = false;
+  let rotateY = 0;
 
   for (const source of session.inputSources) {
     if (!source.gamepad) continue;
@@ -412,11 +487,18 @@ function _processInput(delta) {
       // Meta Quest 2: Y=buttons[5] (上昇), X=buttons[4] (下降)
       goUp   = !!(gp.buttons[5]?.pressed);
       goDown = !!(gp.buttons[4]?.pressed);
+    } else if (source.handedness === 'right') {
+      // 右スティック: axes[2]=X (左右回転), axes[3]=Y
+      const rx = gp.axes[2] ?? 0;
+      rotateY = Math.abs(rx) > DEADZONE ? rx : 0;
     }
   }
 
   if (axisX !== 0 || axisY !== 0) {
     _moveHorizontal(axisX, axisY, delta);
+  }
+  if (rotateY !== 0) {
+    _rotateRig(rotateY, delta);
   }
   if (goUp)   _playerRig.position.y += VERTICAL_SPEED * delta;
   if (goDown) _playerRig.position.y -= VERTICAL_SPEED * delta;
@@ -446,6 +528,16 @@ function _moveHorizontal(x, y, delta) {
 
   _playerRig.position.x += _tmpDir.x;
   _playerRig.position.z += _tmpDir.z;
+}
+
+/**
+ * 右スティック入力でプレイヤーリグを左右回転させる。
+ *
+ * @param {number} x      スティック X 軸値
+ * @param {number} delta  フレーム時間 (秒)
+ */
+function _rotateRig(x, delta) {
+  _playerRig.rotation.y -= x * ROTATION_SPEED * delta;
 }
 
 // -------------------------------------------------------
