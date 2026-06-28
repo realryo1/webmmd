@@ -113,6 +113,7 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
         this.chestDampingValue = document.querySelector(`.chest-damping-value`),
         this.pixelRatioSelect = document.querySelector(`.pixel-ratio-select`),
         this.shadowResolutionSelect = document.querySelector(`.shadow-resolution-select`),
+        this.vrPassthroughInput = document.querySelector(`.vr-passthrough-toggle`),
         this.fileInput ?.addEventListener(`change`, () => {
             this.fileInput.files !== null && this.fileInput.files.length > 0 && this.handlers.onFilesSelected(this.fileInput.files)
         }), this.motionInput ?.addEventListener(`change`, () => {
@@ -153,6 +154,8 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
             this.handlers.onResetRequested()
         }), this.poseResetButton ?.addEventListener(`click`, () => {
             this.handlers.onPoseResetRequested()
+        }), this.vrPassthroughInput ?.addEventListener(`change`, () => {
+            this.handlers.onVrPassthroughEnabledChanged(this.vrPassthroughInput.checked)
         }), this.loopInput ?.addEventListener(`change`, () => {
             this.handlers.onLoopChanged(this.loopInput.checked)
         }), this.colorInput ?.addEventListener(`input`, () => {
@@ -214,7 +217,7 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
         this.storageUsageElement.textContent = e
     } render(e) {
         let t = e.isLoading || e.isMotionLoading || e.isCameraMotionLoading;
-        sf(this.colorInput, e.settings.backgroundColor), this.loadedModelName.textContent = e.loadedModel ?.fileName ?? ``, this.loadedModelName.hidden = e.loadedModel === null, lf(this.pendingModelLoadName, e.pendingModelLoadName), uf(this.pendingMotionLoadNames, e.pendingMotionLoadNames), uf(this.pendingCameraMotionLoadNames, e.pendingCameraMotionLoadNames), cf(this.modelFileError, e.modelLoadError), cf(this.motionFileError, e.motionLoadError), cf(this.cameraMotionFileError, e.cameraMotionLoadError), this.backgroundModeSelect.value = e.settings.backgroundMode, this.autoRestoreInput.checked = e.settings.isAutoRestoreEnabled, this.pixelRatioSelect && (this.pixelRatioSelect.value = String(e.settings.pixelRatioLimit ?? 1.5)), this.shadowResolutionSelect && (this.shadowResolutionSelect.value = String(e.settings.shadowMapSize ?? 512)), this.screenAwakeInput.checked = e.settings.isScreenAwakeEnabled, this.debugModeInput.checked = e.settings.isDebugModeEnabled, this.shadowInput && (this.shadowInput.checked = e.settings.isShadowEnabled === true), this.physicsSensorInput.checked = e.settings.isPhysicsSensorEnabled, sf(this.gravityMagnitudeInput, String(e.settings.gravityMagnitude)), this.gravityMagnitudeValue.textContent = e.settings.gravityMagnitude.toFixed(1), sf(this.physicsSensorImpulseSensitivityInput, String(e.settings.physicsSensorImpulseSensitivity)), this.physicsSensorImpulseSensitivityInput.disabled = !e.settings.isPhysicsSensorEnabled, this.physicsSensorRecalibrateButton.disabled = !e.settings.isPhysicsSensorEnabled, this.gravityVectorField.hidden = !e.settings.isDebugModeEnabled, this.gravityVectorInput.checked = e.settings.isGravityVectorVisible, this.rotationCenterMarkerInput.checked = e.settings.isRotationCenterMarkerVisible,
+        sf(this.colorInput, e.settings.backgroundColor), this.loadedModelName.textContent = e.loadedModel ?.fileName ?? ``, this.loadedModelName.hidden = e.loadedModel === null, lf(this.pendingModelLoadName, e.pendingModelLoadName), uf(this.pendingMotionLoadNames, e.pendingMotionLoadNames), uf(this.pendingCameraMotionLoadNames, e.pendingCameraMotionLoadNames), cf(this.modelFileError, e.modelLoadError), cf(this.motionFileError, e.motionLoadError), cf(this.cameraMotionFileError, e.cameraMotionLoadError), this.backgroundModeSelect.value = e.settings.backgroundMode, this.autoRestoreInput.checked = e.settings.isAutoRestoreEnabled, this.vrPassthroughInput && (this.vrPassthroughInput.checked = e.settings.isVrPassthroughEnabled === true), this.pixelRatioSelect && (this.pixelRatioSelect.value = String(e.settings.pixelRatioLimit ?? 1.5)), this.shadowResolutionSelect && (this.shadowResolutionSelect.value = String(e.settings.shadowMapSize ?? 512)), this.screenAwakeInput.checked = e.settings.isScreenAwakeEnabled, this.debugModeInput.checked = e.settings.isDebugModeEnabled, this.shadowInput && (this.shadowInput.checked = e.settings.isShadowEnabled === true), this.physicsSensorInput.checked = e.settings.isPhysicsSensorEnabled, sf(this.gravityMagnitudeInput, String(e.settings.gravityMagnitude)), this.gravityMagnitudeValue.textContent = e.settings.gravityMagnitude.toFixed(1), sf(this.physicsSensorImpulseSensitivityInput, String(e.settings.physicsSensorImpulseSensitivity)), this.physicsSensorImpulseSensitivityInput.disabled = !e.settings.isPhysicsSensorEnabled, this.physicsSensorRecalibrateButton.disabled = !e.settings.isPhysicsSensorEnabled, this.gravityVectorField.hidden = !e.settings.isDebugModeEnabled, this.gravityVectorInput.checked = e.settings.isGravityVectorVisible, this.rotationCenterMarkerInput.checked = e.settings.isRotationCenterMarkerVisible,
         this.chestSwayToggle && (this.chestSwayToggle.checked = e.settings.isChestSwayEnabled === true),
         this.chestDampingInput && sf(this.chestDampingInput, String(e.settings.chestDamping ?? 0.1)),
         this.chestDampingValue && (this.chestDampingValue.textContent = (e.settings.chestDamping ?? 0.1).toFixed(2)),
@@ -915,6 +918,8 @@ var loadedModels = [], vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = ne
         Uf()
     }, onFullscreenToggled: () => {
         Tf()
+    }, onVrPassthroughEnabledChanged: e => {
+        Z.setState({settings: {...Z.getState().settings, isVrPassthroughEnabled: e}})
     }
 }), $ = new pu(wf.getViewerContainer());
 
@@ -928,7 +933,8 @@ if (vrButton) {
         vrButton: vrButton,
         viewer: $,
         applyShadowEnabled: applyShadowEnabled,
-        getShadowEnabled: () => Z.getState().settings.isShadowEnabled === true
+        getShadowEnabled: () => Z.getState().settings.isShadowEnabled === true,
+        getVrPassthroughEnabled: () => Z.getState().settings.isVrPassthroughEnabled === true
     });
     attachXRSessionListeners($.renderer);
 }

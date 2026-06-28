@@ -100,6 +100,7 @@ export class jd {
         chestDamping: 0.1,
         pixelRatioLimit: 1.5,
         shadowMapSize: 512,
+        isVrPassthroughEnabled: false,
       },
       ...initialState
     };
@@ -2132,7 +2133,7 @@ export class pu {
     this.cameraPivot.add(this.renderCamera);
     
     this.gyroController = new cu();
-    this.renderer = new WebGLRenderer({ antialias: true });
+    this.renderer = new WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.outputColorSpace = 'srgb';
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 

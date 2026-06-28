@@ -49,6 +49,9 @@ let _vrButton   = null;
 let _viewer     = null;
 let _applyShadowEnabled = null;
 let _getShadowEnabled   = null;
+let _getVrPassthroughEnabled = null;
+let _isArSupported = false;
+let _useArSession = false;
 
 /** VR 中の移動用親 Object3D */
 let _playerRig  = null;
@@ -101,7 +104,7 @@ let _savedLightsVisible = [];
  * @param {(enabled: boolean) => void} opts.applyShadowEnabled
  * @param {() => boolean}       opts.getShadowEnabled
  */
-export function initXR({ renderer, scene, getCamera, vrButton, viewer, applyShadowEnabled, getShadowEnabled }) {
+export function initXR({ renderer, scene, getCamera, vrButton, viewer, applyShadowEnabled, getShadowEnabled, getVrPassthroughEnabled }) {
   _renderer  = renderer;
   _scene     = scene;
   _getCamera = getCamera;
@@ -109,6 +112,7 @@ export function initXR({ renderer, scene, getCamera, vrButton, viewer, applyShad
   _viewer    = viewer;
   _applyShadowEnabled = applyShadowEnabled;
   _getShadowEnabled   = getShadowEnabled;
+  _getVrPassthroughEnabled = getVrPassthroughEnabled;
 
   // WebXR を有効化
   renderer.xr.enabled = true;
@@ -119,8 +123,12 @@ export function initXR({ renderer, scene, getCamera, vrButton, viewer, applyShad
     return;
   }
 
-  navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
-    if (!supported) {
+  Promise.all([
+    navigator.xr.isSessionSupported('immersive-ar').catch(() => false),
+    navigator.xr.isSessionSupported('immersive-vr').catch(() => false)
+  ]).then(([arSupported, vrSupported]) => {
+    _isArSupported = arSupported;
+    if (!arSupported && !vrSupported) {
       _disableVrButton('VR非対応');
       return;
     }
@@ -162,14 +170,19 @@ async function _onVrButtonClick() {
     try {
       const viewerElement = document.querySelector('.viewer');
       let newSession;
+      
+      const passthroughRequested = _getVrPassthroughEnabled ? _getVrPassthroughEnabled() : false;
+      const sessionType = (passthroughRequested && _isArSupported) ? 'immersive-ar' : 'immersive-vr';
+      _useArSession = (sessionType === 'immersive-ar');
+
       try {
-        newSession = await navigator.xr.requestSession('immersive-vr', {
+        newSession = await navigator.xr.requestSession(sessionType, {
           optionalFeatures: ['local-floor', 'bounded-floor', 'dom-overlay'],
           domOverlay: { root: viewerElement }
         });
       } catch (e) {
-        console.warn('[xr] requestSession with dom-overlay failed, retrying without dom-overlay...', e);
-        newSession = await navigator.xr.requestSession('immersive-vr', {
+        console.warn(`[xr] requestSession with dom-overlay failed, retrying without dom-overlay...`, e);
+        newSession = await navigator.xr.requestSession(sessionType, {
           optionalFeatures: ['local-floor', 'bounded-floor']
         });
       }
@@ -248,6 +261,35 @@ function _onSessionStart() {
   _savedSceneBackground = _scene.background;
   _scene.background = null;
 
+  if (_useArSession) {
+    // パススルー時は背景を完全に透明にする
+    _renderer.setClearColor(0x000000, 0);
+    if (_viewer && _viewer.grid) {
+      _viewer.grid.visible = false;
+    }
+  } else {
+    // 通常VR時は元の背景色があるならそれ（不透明）に、なければ黒にする
+    if (_savedSceneBackground) {
+      _renderer.setClearColor(_savedSceneBackground, 1);
+    } else {
+      _renderer.setClearColor(0x000000, 1);
+    }
+
+    // 座標平面（グリッド）を表示し、マテリアル設定を最適化
+    if (_viewer && _viewer.grid) {
+      _viewer.grid.visible = true;
+      if (_viewer.grid.material) {
+        _savedGridMaterialSettings = {
+          transparent: _viewer.grid.material.transparent,
+          depthWrite: _viewer.grid.material.depthWrite
+        };
+        _viewer.grid.material.transparent = false;
+        _viewer.grid.material.depthWrite = false;
+        _viewer.grid.material.needsUpdate = true;
+      }
+    }
+  }
+
   // Fixed Foveated Rendering (FFR: 固定フォビエートレンダリング) を完全にオフにする
   // (これが画面中央の解像度境界による四角いもや・スペキュラ断絶の真の原因)
   if (_renderer.xr && typeof _renderer.xr.setFoveation === 'function') {
@@ -262,20 +304,6 @@ function _onSessionStart() {
 
   if (_applyShadowEnabled) {
     _applyShadowEnabled(false);
-  }
-
-  // 座標平面（グリッド）を表示し、マテリアル設定を最適化
-  if (_viewer && _viewer.grid) {
-    _viewer.grid.visible = true;
-    if (_viewer.grid.material) {
-      _savedGridMaterialSettings = {
-        transparent: _viewer.grid.material.transparent,
-        depthWrite: _viewer.grid.material.depthWrite
-      };
-      _viewer.grid.material.transparent = false;
-      _viewer.grid.material.depthWrite = false;
-      _viewer.grid.material.needsUpdate = true;
-    }
   }
 
   // playerRig をシーンに追加
@@ -366,6 +394,14 @@ function _onSessionEnd() {
   // scene.background を復元
   _scene.background = _savedSceneBackground;
   _savedSceneBackground = null;
+
+  // クリアカラーをデフォルト（不透明黒）に戻す
+  _renderer.setClearColor(0x000000, 1);
+
+  // グリッドを再表示
+  if (_viewer && _viewer.grid) {
+    _viewer.grid.visible = true;
+  }
 
   // トーンマッピングとシャドウを復元
   _renderer.toneMapping = _savedToneMapping;
