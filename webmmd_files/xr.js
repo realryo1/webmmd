@@ -78,6 +78,10 @@ let _savedToneMapping = 0;
 let _savedShadowMapEnabled = false;
 /** VR開始前のシーン背景色 (WebXRコンポジタとの干渉を防ぐために保存) */
 let _savedSceneBackground = null;
+/** VR開始前のグリッドマテリアル設定保存用 */
+let _savedGridMaterialSettings = null;
+/** VR開始前のライトの表示状態保存用 */
+let _savedLightsVisible = [];
 
 // -------------------------------------------------------
 // 公開 API
@@ -243,13 +247,34 @@ function _onSessionStart() {
   _savedSceneBackground = _scene.background;
   _scene.background = null;
 
-  // トーンマッピングとシャドウを一時無効化
+  // Fixed Foveated Rendering (FFR: 固定フォビエートレンダリング) を完全にオフにする
+  // (これが画面中央の解像度境界による四角いもや・スペキュラ断絶の真の原因)
+  if (_renderer.xr && typeof _renderer.xr.setFoveation === 'function') {
+    _renderer.xr.setFoveation(0);
+  }
+
+  // トーンマッピングとシャドウを一時無効化 (WebGLエラー・干渉防止)
   _savedToneMapping = _renderer.toneMapping;
   _savedShadowMapEnabled = _renderer.shadowMap.autoUpdate;
   _renderer.toneMapping = 0;
   _renderer.shadowMap.autoUpdate = false;
+
   if (_applyShadowEnabled) {
     _applyShadowEnabled(false);
+  }
+
+  // 座標平面（グリッド）を表示し、マテリアル設定を最適化
+  if (_viewer && _viewer.grid) {
+    _viewer.grid.visible = true;
+    if (_viewer.grid.material) {
+      _savedGridMaterialSettings = {
+        transparent: _viewer.grid.material.transparent,
+        depthWrite: _viewer.grid.material.depthWrite
+      };
+      _viewer.grid.material.transparent = false;
+      _viewer.grid.material.depthWrite = false;
+      _viewer.grid.material.needsUpdate = true;
+    }
   }
 
   // playerRig をシーンに追加
@@ -343,6 +368,7 @@ function _onSessionEnd() {
   // トーンマッピングとシャドウを復元
   _renderer.toneMapping = _savedToneMapping;
   _renderer.shadowMap.autoUpdate = _savedShadowMapEnabled;
+
   if (_applyShadowEnabled && _getShadowEnabled) {
     _applyShadowEnabled(_getShadowEnabled());
   }

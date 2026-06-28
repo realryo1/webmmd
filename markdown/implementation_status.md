@@ -1,5 +1,16 @@
 # Implementation Status
 
+## 2026-06-29
+
+| Item | Status | Details |
+| --- | --- | --- |
+| VRモード時の黒いもや（FFR境界）バグの解消 | Completed | Meta Quest等のVRデバイスで有効になる「固定フォビエートレンダリング（FFR）」による解像度境界がグリッドと干渉して「四角形のもや」や「スペキュラ断絶」を引き起こしていた問題を、`_renderer.xr.setFoveation(0)` でFFRを完全無効化することで解消。また `scene.background` 透過処理を実装し、コンポジタ合成干渉を防止。 |
+| 通常ループとVRループの描画競合防止 | Completed | `clean_logic.js` 内の `pu.render` ループに `isPresenting` のガードを入れ、VR起動中に通常のカメラによる重複描画が行われないように修正。 |
+| 反映ファイル | Completed | `webmmd_files/xr.js`, `webmmd_files/clean_logic.js`, `webmmd_files/style.css` |
+| レンダリング仕様書作成 | Completed | `markdown/rendering_spec.md` を作成し、トーンマッピングやシャドウ、WebXR VRモード動作時の留意事項などをドキュメント化。 |
+
+---
+
 ## 2026-06-23 (最新)
 
 | Item | Status | Details |

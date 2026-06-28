@@ -2201,6 +2201,12 @@ export class pu {
 
   render = () => {
     this.animationFrameId = window.requestAnimationFrame(this.render);
+
+    // VRプレゼンテーション中は、通常のレンダリングループの処理をスキップする (XR用のループと競合するのを防ぐ)
+    if (this.renderer.xr.enabled && this.renderer.xr.isPresenting) {
+      return;
+    }
+
     const delta = Math.min(this.clock.getDelta(), 0.1);
 
     this.controls.update();
