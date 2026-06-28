@@ -111,6 +111,8 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
         this.chestStiffnessValue = document.querySelector(`.chest-stiffness-value`),
         this.chestDampingInput = document.querySelector(`.chest-damping-input`),
         this.chestDampingValue = document.querySelector(`.chest-damping-value`),
+        this.pixelRatioSelect = document.querySelector(`.pixel-ratio-select`),
+        this.shadowResolutionSelect = document.querySelector(`.shadow-resolution-select`),
         this.fileInput ?.addEventListener(`change`, () => {
             this.fileInput.files !== null && this.fileInput.files.length > 0 && this.handlers.onFilesSelected(this.fileInput.files)
         }), this.motionInput ?.addEventListener(`change`, () => {
@@ -201,6 +203,10 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
             const v = Number(this.chestDampingInput.value);
             if (this.chestDampingValue) this.chestDampingValue.textContent = v.toFixed(2);
             this.handlers.onChestDampingChanged(v);
+        }), this.pixelRatioSelect ?.addEventListener(`change`, () => {
+            this.handlers.onPixelRatioLimitChanged?.(Number(this.pixelRatioSelect.value))
+        }), this.shadowResolutionSelect ?.addEventListener(`change`, () => {
+            this.handlers.onShadowMapSizeChanged?.(Number(this.shadowResolutionSelect.value))
         })
     } getViewerContainer() {
         return this.viewerContainer
@@ -208,7 +214,7 @@ var Hd = `再生`, Ud = `一時停止`, Wd = `読み込み中...`, Gd = `VMD は
         this.storageUsageElement.textContent = e
     } render(e) {
         let t = e.isLoading || e.isMotionLoading || e.isCameraMotionLoading;
-        sf(this.colorInput, e.settings.backgroundColor), this.loadedModelName.textContent = e.loadedModel ?.fileName ?? ``, this.loadedModelName.hidden = e.loadedModel === null, lf(this.pendingModelLoadName, e.pendingModelLoadName), uf(this.pendingMotionLoadNames, e.pendingMotionLoadNames), uf(this.pendingCameraMotionLoadNames, e.pendingCameraMotionLoadNames), cf(this.modelFileError, e.modelLoadError), cf(this.motionFileError, e.motionLoadError), cf(this.cameraMotionFileError, e.cameraMotionLoadError), this.backgroundModeSelect.value = e.settings.backgroundMode, this.autoRestoreInput.checked = e.settings.isAutoRestoreEnabled, this.screenAwakeInput.checked = e.settings.isScreenAwakeEnabled, this.debugModeInput.checked = e.settings.isDebugModeEnabled, this.shadowInput && (this.shadowInput.checked = e.settings.isShadowEnabled === true), this.physicsSensorInput.checked = e.settings.isPhysicsSensorEnabled, sf(this.gravityMagnitudeInput, String(e.settings.gravityMagnitude)), this.gravityMagnitudeValue.textContent = e.settings.gravityMagnitude.toFixed(1), sf(this.physicsSensorImpulseSensitivityInput, String(e.settings.physicsSensorImpulseSensitivity)), this.physicsSensorImpulseSensitivityInput.disabled = !e.settings.isPhysicsSensorEnabled, this.physicsSensorRecalibrateButton.disabled = !e.settings.isPhysicsSensorEnabled, this.gravityVectorField.hidden = !e.settings.isDebugModeEnabled, this.gravityVectorInput.checked = e.settings.isGravityVectorVisible, this.rotationCenterMarkerInput.checked = e.settings.isRotationCenterMarkerVisible,
+        sf(this.colorInput, e.settings.backgroundColor), this.loadedModelName.textContent = e.loadedModel ?.fileName ?? ``, this.loadedModelName.hidden = e.loadedModel === null, lf(this.pendingModelLoadName, e.pendingModelLoadName), uf(this.pendingMotionLoadNames, e.pendingMotionLoadNames), uf(this.pendingCameraMotionLoadNames, e.pendingCameraMotionLoadNames), cf(this.modelFileError, e.modelLoadError), cf(this.motionFileError, e.motionLoadError), cf(this.cameraMotionFileError, e.cameraMotionLoadError), this.backgroundModeSelect.value = e.settings.backgroundMode, this.autoRestoreInput.checked = e.settings.isAutoRestoreEnabled, this.pixelRatioSelect && (this.pixelRatioSelect.value = String(e.settings.pixelRatioLimit ?? 1.5)), this.shadowResolutionSelect && (this.shadowResolutionSelect.value = String(e.settings.shadowMapSize ?? 512)), this.screenAwakeInput.checked = e.settings.isScreenAwakeEnabled, this.debugModeInput.checked = e.settings.isDebugModeEnabled, this.shadowInput && (this.shadowInput.checked = e.settings.isShadowEnabled === true), this.physicsSensorInput.checked = e.settings.isPhysicsSensorEnabled, sf(this.gravityMagnitudeInput, String(e.settings.gravityMagnitude)), this.gravityMagnitudeValue.textContent = e.settings.gravityMagnitude.toFixed(1), sf(this.physicsSensorImpulseSensitivityInput, String(e.settings.physicsSensorImpulseSensitivity)), this.physicsSensorImpulseSensitivityInput.disabled = !e.settings.isPhysicsSensorEnabled, this.physicsSensorRecalibrateButton.disabled = !e.settings.isPhysicsSensorEnabled, this.gravityVectorField.hidden = !e.settings.isDebugModeEnabled, this.gravityVectorInput.checked = e.settings.isGravityVectorVisible, this.rotationCenterMarkerInput.checked = e.settings.isRotationCenterMarkerVisible,
         this.chestSwayToggle && (this.chestSwayToggle.checked = e.settings.isChestSwayEnabled === true),
         this.chestDampingInput && sf(this.chestDampingInput, String(e.settings.chestDamping ?? 0.1)),
         this.chestDampingValue && (this.chestDampingValue.textContent = (e.settings.chestDamping ?? 0.1).toFixed(2)),
@@ -811,6 +817,18 @@ var loadedModels = [], vf = [], yf = [], bf = 0, xf = 0, Sf = 0, Cf = 0, wf = ne
         if (!e) {
             Td().catch(err => console.warn('[main] clearSessionCache on disable failed', err));
         }
+    }, onPixelRatioLimitChanged: e => {
+        Z.setState({
+            settings: {
+                ...Z.getState().settings, pixelRatioLimit: e
+            }
+        })
+    }, onShadowMapSizeChanged: e => {
+        Z.setState({
+            settings: {
+                ...Z.getState().settings, shadowMapSize: e
+            }
+        })
     }, onScreenAwakeEnabledChanged: e => {
         Z.setState({
             settings: {
@@ -920,8 +938,9 @@ $.renderer.shadowMap.enabled = true;
 $.renderer.shadowMap.type = 2;
 $.scene.traverse(function(obj) {
     if (obj.isDirectionalLight) {
-        obj.shadow.mapSize.width = 1024;
-        obj.shadow.mapSize.height = 1024;
+        const initSize = Z.getState().settings.shadowMapSize ?? 512;
+        obj.shadow.mapSize.width = initSize;
+        obj.shadow.mapSize.height = initSize;
         obj.shadow.camera.near = 0.5;
         obj.shadow.camera.far = 500;
         obj.shadow.camera.left = -50;

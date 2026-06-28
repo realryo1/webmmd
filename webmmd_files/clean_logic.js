@@ -98,6 +98,8 @@ export class jd {
         isGyroEnabled: false,
         isChestSwayEnabled: false,
         chestDamping: 0.1,
+        pixelRatioLimit: 1.5,
+        shadowMapSize: 512,
       },
       ...initialState
     };
@@ -555,30 +557,79 @@ async function selectPmxFile(pmxFiles) {
 }
 
 function disposeModel(parent) {
-  parent.traverse(child => {
-    if (child.isMesh || child.isSkinnedMesh) {
-      if (child.geometry) {
-        child.geometry.dispose();
-      }
-      if (child.material) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        for (const mat of materials) {
-          if (!mat) continue;
-          
-          for (const key of Object.keys(mat)) {
-            const val = mat[key];
-            if (val && typeof val === 'object' && val.isTexture) {
-              val.dispose();
+  if (!parent || typeof parent.traverse !== 'function') return;
+  try {
+    parent.traverse(child => {
+      try {
+        if (child.isMesh || child.isSkinnedMesh) {
+          if (child.geometry && typeof child.geometry.dispose === 'function') {
+            try {
+              child.geometry.dispose();
+            } catch (e) {
+              console.warn('[disposeModel] geometry dispose failed', e);
             }
           }
-          mat.dispose();
+          if (child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            for (const mat of materials) {
+              if (!mat) continue;
+              
+              const textureKeys = [
+                'map', 'lightMap', 'aoMap', 'emissiveMap', 'bumpMap', 
+                'normalMap', 'displacementMap', 'roughnessMap', 'metalnessMap', 
+                'alphaMap', 'envMap', 'gradientMap'
+              ];
+              for (const key of textureKeys) {
+                try {
+                  const val = mat[key];
+                  if (val && typeof val === 'object' && val.isTexture && typeof val.dispose === 'function') {
+                    val.dispose();
+                  }
+                } catch (e) {
+                  // 無視
+                }
+              }
+              
+              try {
+                for (const key of Object.keys(mat)) {
+                  if (textureKeys.includes(key)) continue;
+                  try {
+                    const val = mat[key];
+                    if (val && typeof val === 'object' && val.isTexture && typeof val.dispose === 'function') {
+                      val.dispose();
+                    }
+                  } catch (e) {
+                    // 無視
+                  }
+                }
+              } catch (e) {
+                // 無視
+              }
+
+              if (typeof mat.dispose === 'function') {
+                try {
+                  mat.dispose();
+                } catch (e) {
+                  console.warn('[disposeModel] material dispose failed', e);
+                }
+              }
+            }
+          }
+          if (child.isSkinnedMesh && child.skeleton && typeof child.skeleton.dispose === 'function') {
+            try {
+              child.skeleton.dispose();
+            } catch (e) {
+              console.warn('[disposeModel] skeleton dispose failed', e);
+            }
+          }
         }
+      } catch (e) {
+        console.warn('[disposeModel] child process failed', e);
       }
-      if (child.isSkinnedMesh && child.skeleton) {
-        child.skeleton.dispose();
-      }
-    }
-  });
+    });
+  } catch (e) {
+    console.warn('[disposeModel] traverse failed', e);
+  }
 }
 
 async function parseModelFiles(normalizedFiles) {
@@ -2083,7 +2134,7 @@ export class pu {
     this.gyroController = new cu();
     this.renderer = new WebGLRenderer({ antialias: true });
     this.renderer.outputColorSpace = 'srgb';
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 
     this.container.querySelectorAll('canvas').forEach(el => el.remove());
     this.container.append(this.renderer.domElement);
@@ -2172,6 +2223,30 @@ export class pu {
     this.isDebugModeEnabled = settings.isDebugModeEnabled;
     this.scene.background = new Color(settings.backgroundColor);
     this.grid.visible = settings.backgroundMode === 'grid';
+
+    // pixelRatioLimit
+    const limit = settings.pixelRatioLimit ?? 1.5;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, limit));
+
+    // shadowMapSize
+    const size = settings.shadowMapSize ?? 512;
+    this.scene.traverse(obj => {
+      if (obj.isDirectionalLight) {
+        if (obj.shadow.mapSize.width !== size || obj.shadow.mapSize.height !== size) {
+          obj.shadow.mapSize.width = size;
+          obj.shadow.mapSize.height = size;
+          if (obj.shadow.map) {
+            obj.shadow.map.dispose();
+            obj.shadow.map = null;
+          }
+          const wasEnabled = obj.castShadow;
+          if (wasEnabled) {
+            obj.castShadow = false;
+            obj.castShadow = true;
+          }
+        }
+      }
+    });
   }
 
   addModel(model) {

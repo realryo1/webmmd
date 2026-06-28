@@ -371,8 +371,12 @@ class MMDAnimationHelper {
 			if ( this.meshes[ i ] === mesh ) {
 
 				const obj = this.objects.get( mesh );
-				if ( obj && obj.physics ) {
-					obj.physics.dispose();
+				if ( obj && obj.physics && typeof obj.physics.dispose === 'function' ) {
+					try {
+						obj.physics.dispose();
+					} catch (e) {
+						console.warn('[MMDAnimationHelper] physics dispose failed', e);
+					}
 				}
 				this.objects.delete( mesh );
 				found = true;
