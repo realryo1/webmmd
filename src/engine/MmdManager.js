@@ -24,7 +24,6 @@ export class MmdManager {
     this.mmdRuntime = new MmdRuntime(scene, mmdPhysics);
     this.mmdRuntime.register(scene);
 
-    this.isLooping = true;
 
     // 音声同期用オブザーバーの登録
     this.scene.onBeforeRenderObservable.add(() => {
@@ -33,7 +32,7 @@ export class MmdManager {
 
       for (const model of this.deployedModels.values()) {
         if (model.audio) {
-          model.audio.loop = this.isLooping;
+          model.audio.loop = true;
 
           // 再生状態の同期
           if (isPlaying && model.audio.paused) {
@@ -250,7 +249,7 @@ export class MmdManager {
         model.audio = null;
       }
       model.audio = new Audio(audioBlobUrl);
-      model.audio.loop = this.isLooping;
+      model.audio.loop = true;
       // 初期シーク
       model.audio.currentTime = this.mmdRuntime.currentTime;
       if (this.mmdRuntime.isAnimationPlaying) {
@@ -318,14 +317,6 @@ export class MmdManager {
     }
   }
 
-  setLooping(enabled) {
-    this.isLooping = enabled;
-    this.mmdRuntime.onLoopObservable.add(() => {
-      if (!this.isLooping) {
-        this.mmdRuntime.pauseAnimation();
-      }
-    });
-  }
 
   removeMotion(vmdFileName, modelId = this.activeModelId) {
     const model = this.deployedModels.get(modelId);

@@ -62,33 +62,7 @@
           </div>
         </section>
         <!-- assets-motions section was removed -->
-        <section class="panel" data-section-id="camera-motion" hidden>
-          <div class="panel-header">
-            <h3>カメラモーション</h3>
-            <span class="panel-toggle-icon">▼</span>
-          </div>
-          <div class="panel-content">
-            <div class="panel-content-inner">
-              <div class="camera-motion-list">
-                <label class="motion-entry">
-                  <input type="radio" name="camera-motion">
-                  <span>なし</span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section class="panel" id="sound-panel" data-section-id="sound">
-          <div class="panel-header">
-            <h3>サウンド</h3>
-            <span class="panel-toggle-icon">▼</span>
-          </div>
-          <div class="panel-content">
-            <div class="panel-content-inner">
-              <p id="sound-status" class="motion-empty">モーションを選択すると音声ファイルを検索します。</p>
-            </div>
-          </div>
-        </section>
+
         <section class="panel" id="scene-panel" data-section-id="scene">
           <div class="panel-header">
             <h3>シーン管理 (.yml)</h3>
@@ -212,33 +186,18 @@
                     <option value="1024">高 (1024x1024)</option>
                   </select>
                 </label>
-                <label class="checkbox-field field--toggle">
-                  <input class="loop-input" type="checkbox" checked>
-                  <span>ループ再生</span>
-                </label>
-                <label class="checkbox-field field--toggle">
-                  <input class="screen-awake-toggle" type="checkbox">
-                  <span>画面を常時点灯</span>
-                </label>
                 <button class="action-button clear-service-worker-button" type="button"
-                  style="margin-top:0.5em;background:#a13d3d;color:#fff">
+                  style="margin-top:0.5em;background:#666;color:#fff">
                   アプリのキャッシュを強制更新
+                </button>
+                <button class="action-button reset-user-data-button" type="button"
+                  style="margin-top:0.5em;background:#b00020;color:#fff">
+                  ユーザーデータをリセット
                 </button>
               </div>
             </div>
           </div>
         </section>
-
-        <p class="status" aria-live="polite">assets フォルダを設定すると model / motion を検知して一覧表示します。</p>
-        <footer class="sidebar-footer">
-          <p class="sidebar-footer__notice">
-            読み込んだ各ファイルは一切アップロードされません。ブラウザのローカルストレージに保存され、ユーザ自身は再利用可能です。「キャッシュをクリア」ボタンによりローカルストレージの内容を削除できます。
-          </p>
-          <a class="sidebar-footer__link" href="https://webmmd.pages.dev/licenses.txt" target="_blank"
-            rel="noopener noreferrer">
-            ライセンス情報
-          </a>
-        </footer>
       </aside>
       <main class="viewer" aria-label="PMX preview">
         <div class="viewer-loading">

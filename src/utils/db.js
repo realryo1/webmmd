@@ -54,3 +54,18 @@ export async function clearDirectoryHandle() {
     console.error("IndexedDB delete error:", e);
   }
 }
+
+/**
+ * IndexedDBを完全削除する（初回訪問状態に戻す）
+ */
+export function resetAllData() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase("webmmd-assets-db");
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => {
+      console.warn("IndexedDB deleteDatabase blocked");
+      resolve();
+    };
+  });
+}

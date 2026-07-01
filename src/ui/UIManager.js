@@ -1,6 +1,6 @@
 import { extractZipEntries } from "../utils/zipLoader";
 import yaml from "js-yaml";
-import { saveDirectoryHandle, getDirectoryHandle, clearDirectoryHandle } from "../utils/db";
+import { saveDirectoryHandle, getDirectoryHandle, clearDirectoryHandle, resetAllData } from "../utils/db";
 
 export class UIManager {
   engine = null;
@@ -35,7 +35,7 @@ export class UIManager {
 
   playPauseButton = null;
   resetButton = null;
-  loopInput = null;
+
 
   addModelWindowButton = null;
   modelSelectModal = null;
@@ -95,7 +95,6 @@ export class UIManager {
     
     this.playPauseButton = document.querySelector(".play-pause-button");
     this.resetButton = document.querySelector(".reset-button");
-    this.loopInput = document.querySelector(".loop-input");
 
     this.addModelWindowButton = document.getElementById("add-model-window-button");
     this.modelSelectModal = document.getElementById("model-select-modal");
@@ -223,11 +222,6 @@ export class UIManager {
     this.resetButton?.addEventListener("click", reset);
     this.overlayResetButton?.addEventListener("click", reset);
 
-    // ループ
-    this.loopInput?.addEventListener("change", () => {
-      this.mmdManager.setLooping(this.loopInput.checked);
-    });
-
 
 
     // 背景色
@@ -294,12 +288,9 @@ export class UIManager {
     // アプリのキャッシュ強制更新ボタン
     const clearSwBtn = document.querySelector(".clear-service-worker-button");
     clearSwBtn?.addEventListener("click", async () => {
-      if (confirm("アプリのキャッシュを強制更新してリロードしますか？")) {
+      if (confirm("アプリのキャッシュを強制更新してリロードしますか？\n\n※アセットフォルダやシーンなどのユーザーデータは削除されません。")) {
         this.showLoading(true, "キャッシュを強制クリア中...");
         try {
-          // IndexedDBに保存されたアセットフォルダ情報も削除
-          await clearDirectoryHandle();
-
           if ("serviceWorker" in navigator) {
             const registrations = await navigator.serviceWorker.getRegistrations();
             for (const registration of registrations) {
@@ -316,6 +307,39 @@ export class UIManager {
         } catch (err) {
           console.error("Failed to clear service worker:", err);
           this.setStatusText("キャッシュのクリアに失敗しました。");
+          this.showLoading(false);
+        }
+      }
+    });
+
+    // ユーザーデータ完全リセットボタン
+    const resetUserDataBtn = document.querySelector(".reset-user-data-button");
+    resetUserDataBtn?.addEventListener("click", async () => {
+      if (confirm("すべてのユーザーデータをリセットしますか？\n\n・アセットフォルダの設定\n・保存済みシーン\n・アプリキャッシュ\n\n⚠️ この操作は元に戻せません。初回訪問時の状態に戻ります。")) {
+        this.showLoading(true, "ユーザーデータをリセット中...");
+        try {
+          // IndexedDB を完全削除
+          await resetAllData();
+          // localStorage を消去
+          localStorage.clear();
+          // Service Worker を登録解除
+          if ("serviceWorker" in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (const registration of registrations) {
+              await registration.unregister();
+            }
+          }
+          // キャッシュを消去
+          if ("caches" in window) {
+            const keys = await caches.keys();
+            for (const key of keys) {
+              await caches.delete(key);
+            }
+          }
+          window.location.reload(true);
+        } catch (err) {
+          console.error("Failed to reset user data:", err);
+          this.setStatusText("リセットに失敗しました。");
           this.showLoading(false);
         }
       }
@@ -373,6 +397,28 @@ export class UIManager {
           const yamlStr = evt.target.result;
           const sceneData = yaml.load(yamlStr);
           await this.applySceneData(sceneData);
+
+          // 読み込んだシーンをlocalStorageに保存する
+          const sceneName = file.name.replace(/\.[^/.]+$/, ""); // 拡張子を除いたファイル名
+          try {
+            const savedScenesJson = localStorage.getItem("webmmd-saved-scenes");
+            let savedScenes = [];
+            if (savedScenesJson) {
+              try { savedScenes = JSON.parse(savedScenesJson); } catch(e) { savedScenes = []; }
+            }
+            const existingIdx = savedScenes.findIndex(s => s.name === sceneName);
+            if (existingIdx !== -1) {
+              savedScenes[existingIdx].data = yamlStr;
+              savedScenes[existingIdx].date = Date.now();
+            } else {
+              savedScenes.push({ name: sceneName, data: yamlStr, date: Date.now() });
+            }
+            localStorage.setItem("webmmd-saved-scenes", JSON.stringify(savedScenes));
+            this.updateSavedScenesList();
+          } catch (saveErr) {
+            console.warn("シーンの自動保存に失敗しました:", saveErr);
+          }
+
           this.setStatusText(`シーンファイル「${file.name}」から復元しました。`);
         } catch (err) {
           console.error(err);
@@ -973,7 +1019,17 @@ export class UIManager {
         for (const modelData of sceneData.models) {
           // ZIPファイルからのロードだった場合は事前に解凍
           if (modelData.zipName) {
-            const zipEntry = this.mmdManager.fileMap.get(modelData.zipName.toLowerCase());
+            const zipNameLower = modelData.zipName.toLowerCase();
+            let zipEntry = this.mmdManager.fileMap.get(zipNameLower);
+            if (!zipEntry) {
+              // フォルダパス付きキー（例: "assets/mikuv6.zip"）への末尾一致フォールバック
+              for (const [key, entry] of this.mmdManager.fileMap.entries()) {
+                if (key === zipNameLower || key.endsWith("/" + zipNameLower)) {
+                  zipEntry = entry;
+                  break;
+                }
+              }
+            }
             if (!zipEntry) {
               throw new Error(`ZIPファイル「${modelData.zipName}」がアセットフォルダ内に見つかりません。`);
             }
@@ -1085,7 +1141,7 @@ export class UIManager {
       item.style.justifyContent = "space-between";
       item.style.alignItems = "center";
       item.style.padding = "6px 0";
-      item.style.borderBottom = "1px solid #2a3542";
+
 
       const nameSpan = document.createElement("span");
       nameSpan.textContent = scene.name;

@@ -7,12 +7,11 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'inline',
       devOptions: {
-        enabled: false
+        enabled: true
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
         maximumFileSizeToCacheInBytes: 25 * 1024 * 1024, // Babylon.js & Havok WASM用に上限を引き上げ (25MB)
-        globStrict: false
       },
       manifest: {
         name: "webmmd",
