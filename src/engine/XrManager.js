@@ -4,7 +4,7 @@ export class XrManager {
   scene = null;
   ground = null;
   xrHelper = null;
-  
+
   // 移動制御用の状態
   leftStickValues = { x: 0, y: 0 };
   isMovingUp = false;
@@ -19,16 +19,40 @@ export class XrManager {
 
   async initialize(vrButtonElement) {
     try {
-      this.xrHelper = await WebXRDefaultExperience.CreateAsync(this.scene, {
+      // disableDefaultUI: true を指定してデフォルトUIの自動生成を防止
+      this.xrHelper = await this.scene.createDefaultXRExperienceAsync({
         floorMeshes: [this.ground],
-        customButtons: {
-          vr: vrButtonElement
+        uiOptions: {
+          disableDefaultUI: true
         }
       });
 
-      // Quest等のパススルー機能を有効化するための準備
-      const fm = this.xrHelper.baseExperience.featuresManager;
-      
+      // 独自ボタン (overlay-vr-button) を利用可能にする
+      if (vrButtonElement) {
+        vrButtonElement.disabled = false;
+        vrButtonElement.title = "VRモードを開始";
+
+        vrButtonElement.addEventListener("click", async () => {
+          const state = this.xrHelper.baseExperience.state;
+          if (state === WebXRState.IN_XR) {
+            await this.xrHelper.baseExperience.exitXRAsync();
+          } else {
+            await this.xrHelper.baseExperience.enterXRAsync("immersive-vr", "local-floor");
+          }
+        });
+
+        // XRセッションの開始・終了を検知してボタンの状態・テキストを連動させる
+        this.xrHelper.baseExperience.onStateChangedObservable.add((state) => {
+          if (state === WebXRState.IN_XR) {
+            vrButtonElement.title = "VRモードを終了";
+            vrButtonElement.classList.add("active");
+          } else {
+            vrButtonElement.title = "VRモードを開始";
+            vrButtonElement.classList.remove("active");
+          }
+        });
+      }
+
       // コントローラーが追加されたときのバインディング
       this.xrHelper.input.onControllerAddedObservable.add((controller) => {
         controller.onMotionControllerInitObservable.add((motionController) => {
@@ -67,7 +91,7 @@ export class XrManager {
       // X/Yボタン (Quest)
       const xButton = motionController.getComponent("x-button");
       const yButton = motionController.getComponent("y-button");
-      
+
       if (xButton) {
         xButton.onButtonStateChangedObservable.add((state) => {
           this.isMovingDown = state.pressed;
@@ -116,7 +140,7 @@ export class XrManager {
   setPassthroughEnabled(enabled) {
     if (!this.xrHelper) return;
     const fm = this.xrHelper.baseExperience.featuresManager;
-    
+
     // WebXRのパススルー機能（ARカメラ背景）を有効/無効化
     try {
       if (enabled) {

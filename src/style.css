@@ -10,6 +10,11 @@
     box-sizing: border-box
 }
 
+/* Babylon.js が自動挿入するデフォルト VR ボタンを非表示 */
+.xr-button-overlay .babylonVRicon {
+    display: none !important;
+}
+
 html,
 body,
 #app {
