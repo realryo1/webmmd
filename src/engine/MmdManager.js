@@ -181,8 +181,17 @@ export class MmdManager {
       shadowGenerator.addShadowCaster(mesh, true);
     }
 
-    // MmdRuntimeにモデルを登録
+    // 物理パラメータの自動最適化 (揺れもの、除外フィルター等)
+    this._optimizeModelPhysicsMetadata(mesh);
+
+    // MmdRuntimeにモデルを登録 (物理初期化バグを防ぐため、一度無効化したのちレストポーズで初期化)
     const mmdModel = this.mmdRuntime.createMmdModel(mesh);
+    mmdModel.physicsEnabled = false;
+    if (mesh.skeleton) {
+      mesh.skeleton.returnToRestPose();
+    }
+    mesh.computeWorldMatrix(true);
+    mmdModel.initializePhysics();
     mmdModel.physicsEnabled = true;
 
     const id = "model_" + (this._modelIdCounter++);
@@ -310,8 +319,15 @@ export class MmdManager {
         }
       }
       if (!isPlaying) {
-        if (model.mmdModel && model.mmdModel.mesh.skeleton) {
-          model.mmdModel.mesh.skeleton.returnToRestPose();
+        if (model.mmdModel) {
+          // 初期姿勢（Tポーズ）での物理リセット
+          model.mmdModel.physicsEnabled = false;
+          if (model.mmdModel.mesh.skeleton) {
+            model.mmdModel.mesh.skeleton.returnToRestPose();
+          }
+          model.mmdModel.mesh.computeWorldMatrix(true);
+          model.mmdModel.initializePhysics();
+          model.mmdModel.physicsEnabled = true;
         }
       }
     }
@@ -424,5 +440,118 @@ export class MmdManager {
       URL.revokeObjectURL(entry.blobUrl);
     }
     this.fileMap.clear();
+  }
+
+  // PMXメタデータ（剛体・ジョイント）を走査して自動最適化する
+  _optimizeModelPhysicsMetadata(mesh) {
+    if (!mesh.metadata || !mesh.metadata.rigidBodies) return;
+
+    const rigidBodies = mesh.metadata.rigidBodies;
+    const joints = mesh.metadata.joints || [];
+    const bones = mesh.skeleton ? mesh.skeleton.bones : [];
+
+    // 除外する不要な物理剛体のキーワード
+    const ignoreKeywords = ["下着", "パンツ", "インナー", "アンダーウェア", "pants", "underwear", "inner"];
+
+    // 揺れもののキーワード
+    const hairKeywords = ["髪", "ヘア", "hair", "ツインテ", "ポニテ", "前髪", "横髪", "後髪", "アホ毛", "サイド", "バック", "テール"];
+    const breastKeywords = ["胸", "おっぱい", "乳", "bust", "breast", "ちち"];
+    const skirtKeywords = ["スカート", "skirt", "裾", "フリル", "プリーツ"];
+    const accessoryKeywords = ["リボン", "ribbon", "袖", "sleeve", "紐", "ひも", "帯", "飾り", "羽", "ウイング", "wing", "しっぽ", "尻尾", "tail"];
+
+    // 1. 剛体 (RigidBody) の最適化
+    for (let i = 0; i < rigidBodies.length; ++i) {
+      const rb = rigidBodies[i];
+      const bone = bones[rb.boneIndex];
+      const boneName = bone ? (bone.name || "") : "";
+      const rbName = rb.name || "";
+      const targetName = (rbName + "_" + boneName).toLowerCase();
+
+      // 不要物理の除外 (FollowBoneにして衝突対象から外す)
+      const shouldIgnore = ignoreKeywords.some(kw => targetName.includes(kw));
+      if (shouldIgnore) {
+        rb.physicsMode = 0; // FollowBone
+        rb.collisionMask = 0; // 他のものと衝突させない
+        continue;
+      }
+
+      const isHair = hairKeywords.some(kw => targetName.includes(kw));
+      const isBreast = breastKeywords.some(kw => targetName.includes(kw));
+      const isSkirt = skirtKeywords.some(kw => targetName.includes(kw));
+      const isAccessory = accessoryKeywords.some(kw => targetName.includes(kw));
+
+      if (isHair || isBreast || isSkirt || isAccessory) {
+        // 質量 (mass) の補正: 小さすぎると他剛体との衝突で投げられて伸びる
+        if (isBreast) {
+          rb.mass = Math.max(rb.mass, 0.8);
+          rb.repulsion = 0.02; // 胸は反発をほぼゼロにする
+          rb.friction = Math.max(rb.friction, 0.8); // 摩擦高め
+        } else if (isHair) {
+          rb.mass = Math.max(rb.mass, 0.4);
+          rb.repulsion = 0.05;
+          rb.friction = Math.max(rb.friction, 0.5);
+        } else if (isSkirt) {
+          rb.mass = Math.max(rb.mass, 0.6);
+          rb.repulsion = 0.05;
+          rb.friction = Math.max(rb.friction, 0.6);
+        } else {
+          rb.mass = Math.max(rb.mass, 0.3);
+          rb.repulsion = 0.05;
+          rb.friction = Math.max(rb.friction, 0.5);
+        }
+
+        // 減衰 (damping) の補正: ブンブン揺れ続けるのを防ぐ
+        rb.linearDamping = Math.max(rb.linearDamping, 0.15);
+        // 角速度ダンピングを少し高めにして安定させる (fps 60換算)
+        rb.angularDamping = Math.max(rb.angularDamping, 0.25);
+      }
+    }
+
+    // 2. ジョイント (Joint) の回転制限の最適化 (ねじれやポリゴンの引き伸ばし防止)
+    for (let i = 0; i < joints.length; ++i) {
+      const joint = joints[i];
+      const rbA = rigidBodies[joint.rigidbodyIndexA];
+      const rbB = rigidBodies[joint.rigidbodyIndexB];
+      if (!rbA || !rbB) continue;
+
+      const boneA = bones[rbA.boneIndex];
+      const boneB = bones[rbB.boneIndex];
+      const boneAName = boneA ? (boneA.name || "") : "";
+      const boneBName = boneB ? (boneB.name || "") : "";
+      const nameConcat = (joint.name + "_" + rbA.name + "_" + rbB.name + "_" + boneAName + "_" + boneBName).toLowerCase();
+
+      const isHairJoint = hairKeywords.some(kw => nameConcat.includes(kw));
+      const isBreastJoint = breastKeywords.some(kw => nameConcat.includes(kw));
+      const isSkirtJoint = skirtKeywords.some(kw => nameConcat.includes(kw));
+      const isAccessoryJoint = accessoryKeywords.some(kw => nameConcat.includes(kw));
+
+      if (isHairJoint || isBreastJoint || isSkirtJoint || isAccessoryJoint) {
+        // 回転制限 (ラジアン)
+        // X軸は ±20度程度 (0.35 rad)
+        // Y, Z軸は ±8度程度 (0.14 rad) でねじれを制限
+        let xLimit = 20 * Math.PI / 180;
+        let yzLimit = 8 * Math.PI / 180;
+
+        if (isBreastJoint) {
+          xLimit = 10 * Math.PI / 180; // 胸はかなり狭く
+          yzLimit = 5 * Math.PI / 180;
+        } else if (isSkirtJoint) {
+          xLimit = 25 * Math.PI / 180;
+          yzLimit = 10 * Math.PI / 180;
+        }
+
+        // X軸クランプ
+        joint.rotationMin[0] = Math.max(joint.rotationMin[0], -xLimit);
+        joint.rotationMax[0] = Math.min(joint.rotationMax[0], xLimit);
+
+        // Y軸クランプ
+        joint.rotationMin[1] = Math.max(joint.rotationMin[1], -yzLimit);
+        joint.rotationMax[1] = Math.min(joint.rotationMax[1], yzLimit);
+
+        // Z軸クランプ
+        joint.rotationMin[2] = Math.max(joint.rotationMin[2], -yzLimit);
+        joint.rotationMax[2] = Math.min(joint.rotationMax[2], yzLimit);
+      }
+    }
   }
 }

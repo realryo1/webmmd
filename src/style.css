@@ -145,7 +145,6 @@ select {
 .file-input,
 .motion-input,
 .gravity-magnitude-input,
-.physics-sensor-impulse-sensitivity-input,
 .mode-select {
     color: #eef3f8;
     background: #242a31;
@@ -159,8 +158,7 @@ select {
     padding: 8px
 }
 
-.gravity-magnitude-input,
-.physics-sensor-impulse-sensitivity-input {
+.gravity-magnitude-input {
     accent-color: #7aa2d8
 }
 

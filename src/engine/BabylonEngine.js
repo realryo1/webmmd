@@ -10,7 +10,8 @@ import {
   MeshBuilder, 
   HavokPlugin,
   StandardMaterial,
-  Color3
+  Color3,
+  PhysicsViewer
 } from "@babylonjs/core";
 import { GridMaterial } from "@babylonjs/materials";
 import HavokPhysics from "@babylonjs/havok";
@@ -29,6 +30,10 @@ export class BabylonEngine {
   gridMaterial = null;
   solidMaterial = null;
 
+  // Physics debugging
+  _physicsViewer = null;
+  _showPhysicsViewer = false;
+
   async initialize(canvas) {
     this.engine = new Engine(canvas, true, { 
       preserveDrawingBuffer: true, 
@@ -42,8 +47,11 @@ export class BabylonEngine {
     const havokInstance = await HavokPhysics({
       locateFile: () => havokWasmUrl
     });
-    this.physicsPlugin = new HavokPlugin(true, havokInstance);
+    // useDeltaForWorldStep = false にして時間ステップを固定化
+    this.physicsPlugin = new HavokPlugin(false, havokInstance);
     this.scene.enablePhysics(new Vector3(0, -9.8 * 12.5, 0), this.physicsPlugin); // MMDスケールを考慮
+    // タイムステップを 1/60s (約16.6ms) に固定
+    this.physicsPlugin.setTimeStep(1 / 60);
 
     // カメラの初期化
     this.camera = new ArcRotateCamera(
@@ -99,6 +107,7 @@ export class BabylonEngine {
     window.addEventListener("resize", this.handleResize);
     document.addEventListener("fullscreenchange", this.handleFullscreenChange);
     document.addEventListener("webkitfullscreenchange", this.handleFullscreenChange);
+    window.addEventListener("keydown", this.handleKeyDown);
   }
 
   handleResize = () => {
@@ -115,6 +124,50 @@ export class BabylonEngine {
       }
     });
   };
+
+  handleKeyDown = (e) => {
+    if (e.key && e.key.toLowerCase() === "p") {
+      this.togglePhysicsViewer();
+    }
+  };
+
+  togglePhysicsViewer() {
+    if (!this.scene || !this.physicsPlugin) return;
+
+    if (!this._physicsViewer) {
+      this._physicsViewer = new PhysicsViewer(this.scene);
+    }
+
+    this._showPhysicsViewer = !this._showPhysicsViewer;
+
+    if (this._showPhysicsViewer) {
+      this.scene.meshes.forEach(mesh => {
+        if (mesh.physicsBody) {
+          this._physicsViewer.showBody(mesh.physicsBody);
+        }
+      });
+      this.scene.transformNodes.forEach(node => {
+        if (node.physicsBody) {
+          this._physicsViewer.showBody(node.physicsBody);
+        }
+      });
+      console.log("PhysicsViewer enabled");
+    } else {
+      this.scene.meshes.forEach(mesh => {
+        if (mesh.physicsBody) {
+          this._physicsViewer.hideBody(mesh.physicsBody);
+        }
+      });
+      this.scene.transformNodes.forEach(node => {
+        if (node.physicsBody) {
+          this._physicsViewer.hideBody(node.physicsBody);
+        }
+      });
+      this._physicsViewer.dispose();
+      this._physicsViewer = null;
+      console.log("PhysicsViewer disabled");
+    }
+  }
 
   setGravity(magnitude) {
     if (this.scene) {
@@ -172,6 +225,11 @@ export class BabylonEngine {
     window.removeEventListener("resize", this.handleResize);
     document.removeEventListener("fullscreenchange", this.handleFullscreenChange);
     document.removeEventListener("webkitfullscreenchange", this.handleFullscreenChange);
+    window.removeEventListener("keydown", this.handleKeyDown);
+    if (this._physicsViewer) {
+      this._physicsViewer.dispose();
+      this._physicsViewer = null;
+    }
     if (this.engine) {
       this.engine.dispose();
     }
