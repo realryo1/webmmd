@@ -554,4 +554,26 @@ export class MmdManager {
       }
     }
   }
+
+  getMorphTargets(modelId) {
+    const model = this.deployedModels.get(modelId);
+    if (!model || !model.mmdModel || !model.mmdModel.morph) return [];
+    
+    const targets = [];
+    const morphs = model.mmdModel.morph.morphs;
+    for (let i = 0; i < morphs.length; i++) {
+      const morph = morphs[i];
+      const weight = model.mmdModel.morph.getMorphWeightFromIndex(i);
+      targets.push({ name: morph.name, value: weight, index: i });
+    }
+    return targets;
+  }
+
+  setMorphValue(modelId, morphName, value) {
+    const model = this.deployedModels.get(modelId);
+    if (!model || !model.mmdModel || !model.mmdModel.morph) return;
+
+    model.mmdModel.morph.setMorphWeight(morphName, value);
+  }
 }
+

@@ -925,6 +925,115 @@ export class UIManager {
       shadowField.appendChild(shadowSpan);
       settingsSection.appendChild(shadowField);
 
+      // 4. モーフ設定 (折りたたみ)
+      const morphTargets = this.mmdManager.getMorphTargets(model.id);
+      if (morphTargets.length > 0) {
+        const morphDetails = document.createElement("details");
+        morphDetails.style.marginTop = "6px";
+        morphDetails.style.border = "1px solid #44505d";
+        morphDetails.style.borderRadius = "4px";
+        morphDetails.style.background = "#1a1f26";
+        morphDetails.style.padding = "4px 6px";
+
+        const morphSummary = document.createElement("summary");
+        morphSummary.textContent = "モーフ設定";
+        morphSummary.style.fontSize = "11px";
+        morphSummary.style.color = "#8fa3b8";
+        morphSummary.style.cursor = "pointer";
+        morphSummary.style.outline = "none";
+        morphDetails.appendChild(morphSummary);
+
+        const morphContainer = document.createElement("div");
+        morphContainer.style.marginTop = "6px";
+        morphContainer.style.display = "flex";
+        morphContainer.style.flexDirection = "column";
+        morphContainer.style.gap = "6px";
+
+        // モーフ名検索フィルター
+        const filterInput = document.createElement("input");
+        filterInput.type = "text";
+        filterInput.placeholder = "モーフ名で絞り込み...";
+        filterInput.style.width = "100%";
+        filterInput.style.fontSize = "11px";
+        filterInput.style.padding = "2px 4px";
+        filterInput.style.background = "#242a31";
+        filterInput.style.color = "#fff";
+        filterInput.style.border = "1px solid #44505d";
+        filterInput.style.borderRadius = "4px";
+        filterInput.style.marginBottom = "4px";
+        morphContainer.appendChild(filterInput);
+
+        const listContainer = document.createElement("div");
+        listContainer.style.maxHeight = "150px";
+        listContainer.style.overflowY = "auto";
+        listContainer.style.display = "flex";
+        listContainer.style.flexDirection = "column";
+        listContainer.style.gap = "4px";
+
+        const updateMorphList = (filterText = "") => {
+          listContainer.innerHTML = "";
+          const lowerFilter = filterText.toLowerCase();
+
+          morphTargets.forEach(morph => {
+            if (lowerFilter && !morph.name.toLowerCase().includes(lowerFilter)) {
+              return;
+            }
+
+            const row = document.createElement("div");
+            row.style.display = "flex";
+            row.style.alignItems = "center";
+            row.style.justifyContent = "space-between";
+            row.style.gap = "8px";
+
+            const nameLabel = document.createElement("span");
+            nameLabel.textContent = morph.name;
+            nameLabel.style.fontSize = "10px";
+            nameLabel.style.color = "#c7d1dc";
+            nameLabel.style.flex = "1";
+            nameLabel.style.overflow = "hidden";
+            nameLabel.style.textOverflow = "ellipsis";
+            nameLabel.style.whiteSpace = "nowrap";
+
+            const slider = document.createElement("input");
+            slider.type = "range";
+            slider.min = "0.0";
+            slider.max = "1.0";
+            slider.step = "0.01";
+            slider.value = morph.value;
+            slider.style.width = "80px";
+
+            const valDisplay = document.createElement("span");
+            valDisplay.textContent = parseFloat(morph.value).toFixed(2);
+            valDisplay.style.fontSize = "10px";
+            valDisplay.style.color = "#8fd8ff";
+            valDisplay.style.minWidth = "24px";
+            valDisplay.style.textAlign = "right";
+
+            slider.addEventListener("input", () => {
+              const val = parseFloat(slider.value) || 0;
+              this.mmdManager.setMorphValue(model.id, morph.name, val);
+              valDisplay.textContent = val.toFixed(2);
+              morph.value = val; // 状態を保持
+            });
+
+            row.appendChild(nameLabel);
+            row.appendChild(slider);
+            row.appendChild(valDisplay);
+            listContainer.appendChild(row);
+          });
+        };
+
+        filterInput.addEventListener("input", () => {
+          updateMorphList(filterInput.value);
+        });
+
+        updateMorphList();
+        morphContainer.appendChild(listContainer);
+        morphDetails.appendChild(morphContainer);
+        settingsSection.appendChild(morphDetails);
+      }
+
+
       itemContainer.appendChild(settingsSection);
       this.deployedModelsList.appendChild(itemContainer);
     });
@@ -957,13 +1066,22 @@ export class UIManager {
         rz = (model.mesh.rotation.z * 180) / Math.PI;
       }
 
+      const morphs = {};
+      const targets = this.mmdManager.getMorphTargets(model.id);
+      for (const target of targets) {
+        if (target.value > 0) {
+          morphs[target.name] = target.value;
+        }
+      }
+
       models.push({
         name: model.name,
         zipName: model.zipName || null,
         position: [model.mesh.position.x, model.mesh.position.y, model.mesh.position.z],
         rotation: [rx, ry, rz],
         shadowEnabled: model.shadowEnabled ?? true,
-        motions: Array.from(model.motions.keys())
+        motions: Array.from(model.motions.keys()),
+        morphs: morphs
       });
     }
 
@@ -1058,6 +1176,13 @@ export class UIManager {
           }
           if (modelData.shadowEnabled !== undefined) {
             this.mmdManager.setModelShadowEnabled(id, modelData.shadowEnabled);
+          }
+
+          // モーフの適用
+          if (modelData.morphs) {
+            for (const [morphName, val] of Object.entries(modelData.morphs)) {
+              this.mmdManager.setMorphValue(id, morphName, val);
+            }
           }
 
           // モーションの適用
