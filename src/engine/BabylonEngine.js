@@ -56,6 +56,7 @@ export class BabylonEngine {
     );
     this.camera.attachControl(canvas, true);
     this.camera.wheelPrecision = 15;
+    this.camera.pinchPrecision = 200; // ピンチズーム感度（大きいほど鈍感）
     this.camera.lowerRadiusLimit = 1;
     this.camera.upperRadiusLimit = 200;
 
@@ -96,12 +97,23 @@ export class BabylonEngine {
     });
 
     window.addEventListener("resize", this.handleResize);
+    document.addEventListener("fullscreenchange", this.handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", this.handleFullscreenChange);
   }
 
   handleResize = () => {
     if (this.engine) {
       this.engine.resize();
     }
+  };
+
+  // フルスクリーン切替後はCSSレイアウト完了を待ってリサイズ
+  handleFullscreenChange = () => {
+    requestAnimationFrame(() => {
+      if (this.engine) {
+        this.engine.resize();
+      }
+    });
   };
 
   setGravity(magnitude) {
@@ -158,6 +170,8 @@ export class BabylonEngine {
 
   dispose() {
     window.removeEventListener("resize", this.handleResize);
+    document.removeEventListener("fullscreenchange", this.handleFullscreenChange);
+    document.removeEventListener("webkitfullscreenchange", this.handleFullscreenChange);
     if (this.engine) {
       this.engine.dispose();
     }
