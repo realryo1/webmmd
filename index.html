@@ -10,10 +10,6 @@
   <meta name="theme-color" content="#0b1118">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml">
-  <script src="./webmmd_files/ammo.js"></script>
-  <script src="./webmmd_files/js-yaml.min.js"></script>
-  <script type="module" src="./webmmd_files/handler.js"></script>
-  <link rel="stylesheet" crossorigin="" href="./webmmd_files/style.css">
 </head>
 
 <body>
@@ -58,51 +54,15 @@
           <div class="panel-content">
             <div class="panel-content-inner">
               <div class="field" id="deployed-models-wrap">
+                <button id="add-model-window-button" type="button" class="action-button"
+                  style="margin-bottom: 10px;">モデル追加</button>
                 <div id="deployed-models-list" class="deployed-models-list"></div>
               </div>
             </div>
           </div>
         </section>
-        <section class="panel" data-section-id="assets-models">
-          <div class="panel-header">
-            <h3>モデル (.pmx / .zip)</h3>
-            <span class="panel-toggle-icon">▼</span>
-          </div>
-          <div class="panel-content">
-            <div class="panel-content-inner">
-              <div class="field" id="assets-model-list-wrap">
-                <div id="assets-model-list" class="model-list"></div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section class="panel" data-section-id="assets-motions">
-          <div class="panel-header">
-            <h3>モーション (.vmd)</h3>
-            <span class="panel-toggle-icon">▼</span>
-          </div>
-          <div class="panel-content">
-            <div class="panel-content-inner">
-              <div class="field" id="assets-motion-list-wrap">
-                <div id="assets-motion-list" class="motion-list"></div>
-              </div>
-              <div class="playback-button-row">
-                <button class="action-button play-pause-button" type="button" disabled="" hidden="">再生</button>
-                <button class="action-button reset-button" type="button" disabled="" hidden="">
-                  リセット
-                </button>
-                <button class="action-button pose-reset-button" type="button" disabled="" hidden="">
-                  初期ポーズ
-                </button>
-              </div>
-              <label class="checkbox-field">
-                <input class="loop-input" type="checkbox">
-                <span>ループ</span>
-              </label>
-            </div>
-          </div>
-        </section>
-        <section class="panel" data-section-id="camera-motion">
+        <!-- assets-motions section was removed -->
+        <section class="panel" data-section-id="camera-motion" hidden>
           <div class="panel-header">
             <h3>カメラモーション</h3>
             <span class="panel-toggle-icon">▼</span>
@@ -146,73 +106,7 @@
             </div>
           </div>
         </section>
-        <section class="panel material-override-panel" data-section-id="material-override">
-          <div class="panel-header">
-            <span class="debug-material-title">透明マテリアル制御</span>
-            <span class="panel-toggle-icon">▼</span>
-          </div>
-          <div class="panel-content">
-            <div class="panel-content-inner">
-              <div class="material-override-actions">
-                <button class="action-button material-select-all-button" type="button" disabled="">
-                  全選択
-                </button>
-                <button class="action-button material-clear-all-button" type="button" disabled="">
-                  全解除
-                </button>
-              </div>
-              <ul class="material-override-list"></ul>
-            </div>
-          </div>
-        </section>
-        <section class="panel camera-controls-panel" data-section-id="camera-controls">
-          <div class="panel-header">
-            <h3>カメラ操作</h3>
-            <span class="panel-toggle-icon">▼</span>
-          </div>
-          <div class="panel-content">
-            <div class="panel-content-inner">
-              <label class="checkbox-field">
-                <input class="gyro-input" type="checkbox">
-                <span>ジャイロ操作</span>
-              </label>
-              <div class="field">
-                <span>回転モード</span>
-                <div class="gyro-mode-row">
-                  <label class="checkbox-field">
-                    <input class="gyro-mode-input" type="radio" name="gyro-mode" value="viewpoint" checked=""
-                      disabled="">
-                    <span>視点回転</span>
-                  </label>
-                  <input class="gyro-sensitivity-input gyro-sensitivity-input--viewpoint" type="range" min="0.1"
-                    max="3.0" step="0.05" disabled="">
-                </div>
-                <div class="gyro-mode-row">
-                  <label class="checkbox-field">
-                    <input class="gyro-mode-input" type="radio" name="gyro-mode" value="modelCenter" disabled="">
-                    <span>モデル中心</span>
-                  </label>
-                  <input class="gyro-sensitivity-input gyro-sensitivity-input--model-center" type="range" min="0.1"
-                    max="3.0" step="0.05" disabled="">
-                </div>
-              </div>
-              <button class="action-button gyro-recalibrate-button" type="button" disabled="">
-                視点リセット
-              </button>
-              <div class="field tracking-bone-field">
-                <label class="checkbox-field tracking-bone-toggle">
-                  <input class="tracking-enabled-input" type="checkbox" disabled="">
-                  <span>ボーン追跡</span>
-                </label>
-                <select class="tracking-bone-select" disabled=""></select>
-              </div>
-              <label class="checkbox-field field--toggle">
-                <input class="rotation-center-marker-toggle" type="checkbox">
-                <span>回転中心マーカー表示</span>
-              </label>
-            </div>
-          </div>
-        </section>
+
         <section class="panel" data-section-id="settings-display">
           <div class="panel-header">
             <h3 class="settings-group__title">表示</h3>
@@ -319,16 +213,13 @@
                   </select>
                 </label>
                 <label class="checkbox-field field--toggle">
-                  <input class="auto-restore-input" type="checkbox">
-                  <span>前回セッションを自動復元</span>
+                  <input class="loop-input" type="checkbox" checked>
+                  <span>ループ再生</span>
                 </label>
                 <label class="checkbox-field field--toggle">
                   <input class="screen-awake-toggle" type="checkbox">
                   <span>画面を常時点灯</span>
                 </label>
-                <button class="action-button clear-cache-button" type="button">
-                  キャッシュをクリア
-                </button>
                 <button class="action-button clear-service-worker-button" type="button"
                   style="margin-top:0.5em;background:#a13d3d;color:#fff">
                   アプリのキャッシュを強制更新
@@ -337,27 +228,7 @@
             </div>
           </div>
         </section>
-        <section class="panel" data-section-id="settings-debug">
-          <div class="panel-header">
-            <h3 class="settings-group__title">デバッグ</h3>
-            <span class="panel-toggle-icon">▼</span>
-          </div>
-          <div class="panel-content">
-            <div class="panel-content-inner">
-              <div class="settings-group">
-                <label class="checkbox-field field--toggle">
-                  <input class="debug-mode-toggle" type="checkbox">
-                  <span>デバッグ表示</span>
-                </label>
-                <label class="checkbox-field field--toggle gravity-vector-field">
-                  <input class="gravity-vector-toggle" type="checkbox">
-                  <span>重力ベクトル表示</span>
-                </label>
-                <p class="storage-usage">ストレージ使用量: 0 B / 10.0 GB (0.0%)</p>
-              </div>
-            </div>
-          </div>
-        </section>
+
         <p class="status" aria-live="polite">assets フォルダを設定すると model / motion を検知して一覧表示します。</p>
         <footer class="sidebar-footer">
           <p class="sidebar-footer__notice">
@@ -410,14 +281,44 @@
 
           </button>
         </div>
-        <canvas data-engine="three.js r160" width="1418" height="1336"
-          style="display: block; touch-action: none;"></canvas>
+        <canvas id="renderCanvas" style="display: block; width: 100%; height: 100%; touch-action: none;"></canvas>
       </main>
     </div>
   </div>
 
   <input id="assets-directory-input" type="file" multiple hidden webkitdirectory directory>
-  <script src="./webmmd_files/ui.js"></script>
+
+  <!-- モデル選択モーダル -->
+  <div id="model-select-modal" class="modal" hidden>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>モデルの選択と追加</h3>
+        <button class="close-button" id="close-model-modal" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-model-list" class="model-list">
+          <p class="motion-empty">アセットフォルダを設定すると表示されます。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- モーション選択モーダル -->
+  <div id="motion-select-modal" class="modal" hidden>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>モーションの選択と追加</h3>
+        <button class="close-button" id="close-motion-modal" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-motion-list" class="motion-list">
+          <p class="motion-empty">アセットフォルダを設定すると表示されます。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
 </body>
 
 </html>

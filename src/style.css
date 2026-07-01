@@ -76,7 +76,6 @@ select {
 }
 
 .panel-header h3,
-.panel-header .debug-material-title,
 .panel-header .settings-group__title {
     margin: 0;
     font-size: 13px;
@@ -133,11 +132,8 @@ select {
 
 .file-input,
 .motion-input,
-.camera-motion-input,
-.gyro-sensitivity-input,
 .gravity-magnitude-input,
 .physics-sensor-impulse-sensitivity-input,
-.tracking-bone-select,
 .mode-select {
     color: #eef3f8;
     background: #242a31;
@@ -148,48 +144,16 @@ select {
 }
 
 .file-input,
-.motion-input,
-.camera-motion-input {
+.motion-input {
     padding: 8px
 }
 
-.gyro-sensitivity-input,
 .gravity-magnitude-input,
 .physics-sensor-impulse-sensitivity-input {
     accent-color: #7aa2d8
 }
 
-.gyro-mode-row {
-    align-items: center;
-    gap: 8px;
-    display: flex
-}
 
-.gyro-mode-row .checkbox-field {
-    flex-shrink: 0;
-    width: 120px
-}
-
-.gyro-mode-row input[type=range] {
-    flex: 1;
-    min-width: 0
-}
-
-.tracking-bone-field {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    display: flex
-}
-
-.tracking-bone-toggle {
-    flex-shrink: 0
-}
-
-.tracking-bone-select {
-    flex: 1;
-    min-width: 0
-}
 
 .color-input {
     background: #242a31;
@@ -267,57 +231,10 @@ select {
     font-weight: 650
 }
 
-.storage-usage {
-    color: #8fa3b8;
-    margin: 0;
-    font-size: 12px;
-    line-height: 1.5
-}
 
-.material-override-panel {
-    flex-direction: column;
-    display: flex
-}
-
-.debug-material-title {
-    color: #b8c2cc;
-    font-size: 13px
-}
-
-.material-override-actions {
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    display: grid
-}
-
-.material-override-list {
-    flex-direction: column;
-    gap: 8px;
-    max-height: 180px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    overflow: auto
-}
-
-.material-override-entry {
-    background: #20262d;
-    border: 1px solid #343d47;
-    border-radius: 6px;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px;
-    display: flex
-}
-
-.material-override-detail {
-    color: #87919d;
-    font-size: 12px
-}
 
 .motion-list,
-.camera-motion-list {
+.model-list {
     flex-direction: column;
     gap: 8px;
     display: flex
@@ -366,7 +283,8 @@ select {
     display: none
 }
 
-.motion-entry {
+.motion-entry,
+.model-entry {
     color: #c7d1dc;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
@@ -599,4 +517,87 @@ select {
 .viewer.xr-active,
 .viewer:xr-overlay {
     background: transparent !important;
+}
+
+/* モーダルのプレミアムスタイル */
+.modal {
+    position: fixed;
+    z-index: 1000;
+    inset: 0;
+    background: rgba(8, 10, 12, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+}
+.modal:not([hidden]) {
+    opacity: 1;
+    pointer-events: auto;
+}
+.modal-content {
+    background: #191d22;
+    border: 1px solid #44505d;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    transform: scale(0.95);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+.modal:not([hidden]) .modal-content {
+    transform: scale(1);
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #2c323a;
+    background: #1f242b;
+}
+.modal-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 650;
+    color: #eef3f8;
+}
+.close-button {
+    background: none;
+    border: none;
+    color: #8fa3b8;
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.2s, transform 0.2s;
+    padding: 0;
+    line-height: 1;
+}
+.close-button:hover {
+    color: #fff;
+    transform: scale(1.1);
+}
+.modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+    background: #191d22;
+}
+.modal-body .model-entry {
+    background: #242a31;
+    border: 1px solid #3a4450;
+    border-radius: 6px;
+    padding: 8px 12px !important;
+    margin-bottom: 8px;
+    transition: border-color 0.2s, background 0.2s;
+}
+.modal-body .model-entry:hover {
+    background: #2b333c;
+    border-color: #526273;
 }
