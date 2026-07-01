@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  base: '/webmmd/',
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
@@ -17,8 +18,8 @@ export default defineConfig({
         name: "webmmd",
         short_name: "webmmd",
         description: "ブラウザ上で MMD モデルを表示・再生",
-        start_url: "./",
-        scope: "./",
+        start_url: "/webmmd/",
+        scope: "/webmmd/",
         display: "standalone",
         background_color: "#0b1118",
         theme_color: "#0b1118",
