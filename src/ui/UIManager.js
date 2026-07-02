@@ -345,33 +345,6 @@ export class UIManager {
       });
     });
 
-    // アプリのキャッシュ強制更新ボタン
-    const clearSwBtn = document.querySelector(".clear-service-worker-button");
-    clearSwBtn?.addEventListener("click", async () => {
-      if (confirm("アプリのキャッシュを強制更新してリロードしますか？\n\n※アセットフォルダやシーンなどのユーザーデータは削除されません。")) {
-        this.showLoading(true, "キャッシュを強制クリア中...");
-        try {
-          if ("serviceWorker" in navigator) {
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            for (const registration of registrations) {
-              await registration.unregister();
-            }
-          }
-          if ("caches" in window) {
-            const keys = await caches.keys();
-            for (const key of keys) {
-              await caches.delete(key);
-            }
-          }
-          window.location.reload(true);
-        } catch (err) {
-          console.error("Failed to clear service worker:", err);
-          this.setStatusText("キャッシュのクリアに失敗しました。");
-          this.showLoading(false);
-        }
-      }
-    });
-
     // ユーザーデータ完全リセットボタン
     const resetUserDataBtn = document.querySelector(".reset-user-data-button");
     resetUserDataBtn?.addEventListener("click", async () => {

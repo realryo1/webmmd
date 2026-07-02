@@ -41,6 +41,9 @@ export default defineConfig({
       }
     })
   ],
+  optimizeDeps: {
+    include: ['babylon-mmd']
+  },
   server: {
     allowedHosts: ['.ts.net'],
     hmr: {
