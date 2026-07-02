@@ -43,10 +43,34 @@ export class MmdManager {
             model.audio.pause();
           }
 
-          // 時間の同期（0.15秒以上のズレがあれば同期補正）
-          const diff = Math.abs(model.audio.currentTime - runtimeTime);
-          if (diff > 0.15) {
-            model.audio.currentTime = runtimeTime;
+          // 再生速度微調整（playbackRate）による同期
+          if (isPlaying && !model.audio.paused) {
+            // Safariでのロード・デコード待ちのフリーズを防ぐため、
+            // readyStateが 2 (HAVE_CURRENT_DATA) 未満の場合は同期処理を行わない
+            if (model.audio.readyState < 2) {
+              continue;
+            }
+
+            const audioTime = model.audio.currentTime;
+            const diff = runtimeTime - audioTime; // 正なら音声が遅れている、負なら音声が進んでいる
+
+            // ロード直後のズレに対応するため、強制シークのしきい値を 2.0 秒に緩和
+            if (Math.abs(diff) > 2.0) {
+              model.audio.currentTime = runtimeTime;
+              model.audio.playbackRate = 1.0;
+            } else if (diff > 0.05) {
+              // 音声が遅れている -> 再生速度を1.02倍にする
+              model.audio.playbackRate = 1.02;
+            } else if (diff < -0.05) {
+              // 音声が進んでいる -> 再生速度を0.98倍にする
+              model.audio.playbackRate = 0.98;
+            } else if (Math.abs(diff) <= 0.02) {
+              // ズレがほぼない -> 等倍再生に戻す
+              model.audio.playbackRate = 1.0;
+            }
+          } else {
+            // 停止時は等倍に戻す
+            model.audio.playbackRate = 1.0;
           }
         }
       }
@@ -216,6 +240,15 @@ export class MmdManager {
       throw new Error("No active model or target model not found to load motion.");
     }
 
+    // 既存のすべてのモーションと音声を解除する
+    if (model.audio) {
+      model.audio.pause();
+      model.audio = null;
+    }
+    for (const key of Array.from(model.motions.keys())) {
+      this.removeMotion(key, modelId);
+    }
+
     const vmdBlobUrl = this.resolvePath(vmdFileName);
     if (!vmdBlobUrl) {
       throw new Error(`Motion file ${vmdFileName} not found.`);
@@ -288,6 +321,21 @@ export class MmdManager {
 
   get isPlaying() {
     return this.mmdRuntime.isAnimationPlaying;
+  }
+
+  unlockAudios() {
+    for (const model of this.deployedModels.values()) {
+      if (model.audio) {
+        // Safari等の自動再生制限を解除するためのダミー再生
+        model.audio.play()
+          .then(() => {
+            if (!this.mmdRuntime.isAnimationPlaying) {
+              model.audio.pause();
+            }
+          })
+          .catch(e => console.warn("Failed to unlock audio:", e));
+      }
+    }
   }
 
   play() {

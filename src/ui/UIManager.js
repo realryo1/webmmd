@@ -46,6 +46,7 @@ export class UIManager {
   closeMotionModal = null;
   modalMotionList = null;
   currentMotionTargetModelId = null;
+  assetsFiles = [];
 
   overlayPlaybackButton = null;
   overlayResetButton = null;
@@ -204,6 +205,7 @@ export class UIManager {
 
     // 再生・一時停止
     const togglePlay = () => {
+      this.mmdManager.unlockAudios();
       if (this.mmdManager.isPlaying) {
         this.mmdManager.pause();
         this.setPlayButtonText("再生");
@@ -214,6 +216,15 @@ export class UIManager {
     };
     this.playPauseButton?.addEventListener("click", togglePlay);
     this.overlayPlaybackButton?.addEventListener("click", togglePlay);
+
+    // アプリ全体の最初のインタラクションでオーディオのロック解除を試みる
+    const unlockAllOnFirstInteraction = () => {
+      this.mmdManager.unlockAudios();
+      document.removeEventListener("click", unlockAllOnFirstInteraction);
+      document.removeEventListener("touchstart", unlockAllOnFirstInteraction);
+    };
+    document.addEventListener("click", unlockAllOnFirstInteraction);
+    document.addEventListener("touchstart", unlockAllOnFirstInteraction);
 
     // リセット
     const reset = () => {
@@ -263,14 +274,52 @@ export class UIManager {
 
     // フルスクリーン切り替え
     this.fullscreenButton?.addEventListener("click", () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch((err) => {
-          console.warn(`Fullscreen error: ${err.message}`);
-        });
+      const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains("pseudo-fullscreen"));
+
+      if (!isFullscreen) {
+        const docElm = document.documentElement;
+        if (docElm.requestFullscreen) {
+          docElm.requestFullscreen().catch((err) => {
+            console.warn(`Fullscreen error: ${err.message}`);
+            this.enterPseudoFullscreen();
+          });
+        } else if (docElm.webkitRequestFullscreen) {
+          docElm.webkitRequestFullscreen();
+        } else {
+          this.enterPseudoFullscreen();
+        }
       } else {
-        document.exitFullscreen();
+        if (document.body.classList.contains("pseudo-fullscreen")) {
+          this.exitPseudoFullscreen();
+        } else if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
       }
     });
+
+    const onFullscreenChange = () => {
+      const isNativeFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      if (isNativeFullscreen) {
+        this.fullscreenButton?.classList.add("is-active");
+      } else {
+        if (!document.body.classList.contains("pseudo-fullscreen")) {
+          this.fullscreenButton?.classList.remove("is-active");
+        }
+      }
+      window.dispatchEvent(new Event("resize"));
+    };
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && document.body.classList.contains("pseudo-fullscreen")) {
+        this.exitPseudoFullscreen();
+      }
+    });
+
 
 
 
@@ -431,6 +480,52 @@ export class UIManager {
 
   }
 
+  showZipModelSelect(pmxNames) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("zip-model-select-modal");
+      const listContainer = document.getElementById("modal-zip-model-list");
+      const closeBtn = document.getElementById("close-zip-model-modal");
+      
+      listContainer.innerHTML = "";
+      
+      pmxNames.forEach(name => {
+        const item = document.createElement("div");
+        item.className = "model-item";
+        
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "action-button";
+        btn.style.width = "100%";
+        btn.style.textAlign = "left";
+        btn.textContent = name;
+        
+        btn.addEventListener("click", () => {
+          modal.setAttribute("hidden", "");
+          resolve(name);
+        });
+        
+        item.appendChild(btn);
+        listContainer.appendChild(item);
+      });
+      
+      const handleClose = () => {
+        modal.setAttribute("hidden", "");
+        resolve(null);
+      };
+      
+      if (closeBtn) closeBtn.onclick = handleClose;
+      if (modal) {
+        modal.onclick = (e) => {
+          if (e.target === modal) {
+            handleClose();
+          }
+        };
+      }
+      
+      modal?.removeAttribute("hidden");
+    });
+  }
+
   async handleModelLoad(files) {
     this.showLoading(true, "ファイルを展開・準備中...");
     this.setStatusText("アセットを解析中...");
@@ -444,9 +539,21 @@ export class UIManager {
         this.setStatusText("ZIPアーカイブを解凍中...");
         const entries = await extractZipEntries(zipFile);
         this.mmdManager.addFiles(entries);
-        const pmxEntry = entries.find(e => e.name.toLowerCase().endsWith(".pmx"));
-        if (!pmxEntry) throw new Error("ZIPの中に .pmx ファイルが見つかりません");
-        pmxName = pmxEntry.name;
+        const pmxEntries = entries.filter(e => e.name.toLowerCase().endsWith(".pmx"));
+        if (pmxEntries.length === 0) throw new Error("ZIPの中に .pmx ファイルが見つかりません");
+        
+        if (pmxEntries.length > 1) {
+          this.showLoading(false);
+          const selectedName = await this.showZipModelSelect(pmxEntries.map(e => e.name));
+          if (!selectedName) {
+            this.setStatusText("モデルの選択がキャンセルされました。");
+            return;
+          }
+          pmxName = selectedName;
+          this.showLoading(true, "モデルデータを読み込み中...");
+        } else {
+          pmxName = pmxEntries[0].name;
+        }
       } else {
         this.mmdManager.addFiles(fileList);
         const pmxFile = fileList.find(f => f.name.toLowerCase().endsWith(".pmx"));
@@ -550,6 +657,7 @@ export class UIManager {
     this.showLoading(true, "アセットフォルダを解析中...");
     try {
       const fileList = Array.from(files);
+      this.assetsFiles = fileList;
       // MmdManagerにすべてのファイルを登録
       this.mmdManager.addFiles(fileList);
 
@@ -656,17 +764,53 @@ export class UIManager {
       span.style.flex = "1";
       span.style.marginRight = "8px";
 
+      const motionPath = file.webkitRelativePath || file.name;
+      const cleanMotionPath = motionPath.replace(/\\/g, "/").toLowerCase();
+      let isApplied = false;
+      let matchedKey = motionPath;
+
+      if (this.currentMotionTargetModelId) {
+        const model = this.mmdManager.deployedModels.get(this.currentMotionTargetModelId);
+        if (model) {
+          for (const key of model.motions.keys()) {
+            if (key.replace(/\\/g, "/").toLowerCase() === cleanMotionPath) {
+              isApplied = true;
+              matchedKey = key;
+              break;
+            }
+          }
+        }
+      }
+
       const applyBtn = document.createElement("button");
-      applyBtn.textContent = "適用";
+      applyBtn.textContent = isApplied ? "解除" : "適用";
       applyBtn.className = "action-button";
       applyBtn.style.width = "auto";
       applyBtn.style.minHeight = "24px";
       applyBtn.style.padding = "2px 8px";
       applyBtn.style.fontSize = "11px";
+      if (isApplied) {
+        applyBtn.style.background = "#8e3c3c";
+        applyBtn.style.borderColor = "#a64949";
+      }
+
       applyBtn.addEventListener("click", async () => {
         this.motionSelectModal?.setAttribute("hidden", "");
         if (this.currentMotionTargetModelId) {
-          await this.handleMotionLoadForModel(file, this.currentMotionTargetModelId);
+          if (isApplied) {
+            const model = this.mmdManager.deployedModels.get(this.currentMotionTargetModelId);
+            if (model) {
+              if (model.audio) {
+                model.audio.pause();
+                model.audio = null;
+              }
+              this.mmdManager.removeMotion(matchedKey, this.currentMotionTargetModelId);
+            }
+            this.updateDeployedModelsList();
+            this.setStatusText("モーションを解除しました。");
+          } else {
+            await this.handleMotionLoadForModel(file, this.currentMotionTargetModelId);
+          }
         }
       });
 
@@ -895,6 +1039,7 @@ export class UIManager {
       changeMotionBtn.style.fontSize = "11px";
       changeMotionBtn.addEventListener("click", () => {
         this.currentMotionTargetModelId = model.id;
+        this.updateAssetsMotionList(this.assetsFiles || []);
         this.motionSelectModal?.removeAttribute("hidden");
       });
 
@@ -1435,4 +1580,17 @@ export class UIManager {
       this.showLoading(false);
     }
   }
+
+  enterPseudoFullscreen() {
+    document.body.classList.add("pseudo-fullscreen");
+    this.fullscreenButton?.classList.add("is-active");
+    window.dispatchEvent(new Event("resize"));
+  }
+
+  exitPseudoFullscreen() {
+    document.body.classList.remove("pseudo-fullscreen");
+    this.fullscreenButton?.classList.remove("is-active");
+    window.dispatchEvent(new Event("resize"));
+  }
 }
+
