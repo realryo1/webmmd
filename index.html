@@ -175,6 +175,26 @@
             </div>
           </div>
         </section>
+        <section class="panel collapsed" data-section-id="console">
+          <div class="panel-header">
+            <h3 class="settings-group__title">コンソール</h3>
+            <span class="panel-toggle-icon">▼</span>
+          </div>
+          <div class="panel-content">
+            <div class="panel-content-inner">
+              <div class="console-wrapper">
+                <div class="console-actions">
+                  <button id="console-clear-button" class="action-button" type="button" style="min-height: 28px; font-size: 12px; width: auto; padding: 0 12px;">クリア</button>
+                  <label class="checkbox-field field--toggle" style="margin: 0; font-size: 12px;">
+                    <input id="console-autoscroll-toggle" type="checkbox" checked>
+                    <span>自動スクロール</span>
+                  </label>
+                </div>
+                <div id="console-log-container" class="console-log-container"></div>
+              </div>
+            </div>
+          </div>
+        </section>
       </aside>
       <main class="viewer" aria-label="PMX preview">
         <div class="viewer-loading">

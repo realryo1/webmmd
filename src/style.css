@@ -686,3 +686,60 @@ body.pseudo-fullscreen .viewer {
     height: 100dvh !important;
     z-index: 9999 !important;
 }
+
+/* コンソールセクション用スタイル */
+.console-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.console-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.console-log-container {
+    background: #0f1216;
+    border: 1px solid #2d3743;
+    border-radius: 6px;
+    padding: 8px;
+    max-height: 160px;
+    overflow-y: auto;
+    font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.console-log-line {
+    line-height: 1.4;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.console-log-line:last-child {
+    border-bottom: none;
+}
+
+.console-log-line.log-log {
+    color: #c7d1dc;
+}
+
+.console-log-line.log-info {
+    color: #8fd8ff;
+}
+
+.console-log-line.log-warn {
+    color: #ffd88f;
+}
+
+.console-log-line.log-error {
+    color: #ff8f8f;
+}

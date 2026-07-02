@@ -57,6 +57,11 @@ export class UIManager {
   savedScenesList = null;
   sceneInput = null;
 
+  // コンソール要素
+  consoleClearButton = null;
+  consoleAutoscrollToggle = null;
+  consoleLogContainer = null;
+
   constructor(engine, mmdManager, xrManager) {
     this.engine = engine;
     this.mmdManager = mmdManager;
@@ -65,6 +70,7 @@ export class UIManager {
     this.initElements();
     this.setupEvents();
     this.restoreDirectoryHandle();
+    this.setupConsoleHook();
   }
 
   initElements() {
@@ -119,6 +125,11 @@ export class UIManager {
     this.sceneLoadButton = document.getElementById("scene-load-button");
     this.savedScenesList = document.getElementById("saved-scenes-list");
     this.sceneInput = document.querySelector(".scene-input");
+
+    // コンソールDOMの初期化
+    this.consoleClearButton = document.getElementById("console-clear-button");
+    this.consoleAutoscrollToggle = document.getElementById("console-autoscroll-toggle");
+    this.consoleLogContainer = document.getElementById("console-log-container");
 
     this.updateDeployedModelsList();
     this.updateSavedScenesList();
@@ -1591,6 +1602,89 @@ export class UIManager {
     document.body.classList.remove("pseudo-fullscreen");
     this.fullscreenButton?.classList.remove("is-active");
     window.dispatchEvent(new Event("resize"));
+  }
+
+  setupConsoleHook() {
+    if (!this.consoleLogContainer) return;
+
+    const originalConsole = {
+      log: console.log,
+      info: console.info,
+      warn: console.warn,
+      error: console.error
+    };
+
+    const addLogToUI = (type, args) => {
+      if (!this.consoleLogContainer) return;
+
+      const message = args.map(arg => {
+        if (typeof arg === "object") {
+          try {
+            return JSON.stringify(arg);
+          } catch (e) {
+            return String(arg);
+          }
+        }
+        return String(arg);
+      }).join(" ");
+
+      const line = document.createElement("div");
+      line.className = `console-log-line log-${type}`;
+      
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+      
+      line.textContent = `[${timeStr}] ${message}`;
+      
+      this.consoleLogContainer.appendChild(line);
+
+      // 最大保持数を超えたら古いものを削除
+      const maxLogs = 200;
+      while (this.consoleLogContainer.childNodes.length > maxLogs) {
+        this.consoleLogContainer.removeChild(this.consoleLogContainer.firstChild);
+      }
+
+      // 自動スクロール
+      if (this.consoleAutoscrollToggle && this.consoleAutoscrollToggle.checked) {
+        this.consoleLogContainer.scrollTop = this.consoleLogContainer.scrollHeight;
+      }
+    };
+
+    console.log = (...args) => {
+      originalConsole.log.apply(console, args);
+      addLogToUI("log", args);
+    };
+
+    console.info = (...args) => {
+      originalConsole.info.apply(console, args);
+      addLogToUI("info", args);
+    };
+
+    console.warn = (...args) => {
+      originalConsole.warn.apply(console, args);
+      addLogToUI("warn", args);
+    };
+
+    console.error = (...args) => {
+      originalConsole.error.apply(console, args);
+      addLogToUI("error", args);
+    };
+
+    // windowの未ハンドルのエラーもキャプチャする
+    window.addEventListener("error", (event) => {
+      addLogToUI("error", [event.message]);
+    });
+
+    window.addEventListener("unhandledrejection", (event) => {
+      addLogToUI("error", [`Unhandled promise rejection: ${event.reason}`]);
+    });
+
+    // クリアボタンのイベント
+    this.consoleClearButton?.addEventListener("click", () => {
+      if (this.consoleLogContainer) {
+        this.consoleLogContainer.innerHTML = "";
+      }
+    });
   }
 }
 
