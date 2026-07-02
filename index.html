@@ -119,6 +119,15 @@
                   <span>重力加速度 <span class="gravity-magnitude-value">9.8</span></span>
                   <input class="gravity-magnitude-input" type="range" min="0.1" max="50.0" step="0.1">
                 </label>
+                <hr style="border:0; border-top:1px solid #333; margin:0.8em 0;">
+                <label class="checkbox-field field--toggle">
+                  <input class="breast-physics-toggle" type="checkbox" checked>
+                  <span>胸の物理揺れを有効化</span>
+                </label>
+                <label class="field" style="margin-top:0.8em;">
+                  <span>胸の揺れ強度 <span class="breast-physics-stiffness-value">1.0</span></span>
+                  <input class="breast-physics-stiffness-input" type="range" min="0.0" max="3.0" step="0.1" value="1.0">
+                </label>
               </div>
             </div>
           </div>
@@ -185,6 +194,7 @@
               <div class="console-wrapper">
                 <div class="console-actions">
                   <button id="console-clear-button" class="action-button" type="button" style="min-height: 28px; font-size: 12px; width: auto; padding: 0 12px;">クリア</button>
+                  <button id="console-copy-button" class="action-button" type="button" style="min-height: 28px; font-size: 12px; width: auto; padding: 0 12px; margin-left: 4px;">全コピー</button>
                   <label class="checkbox-field field--toggle" style="margin: 0; font-size: 12px;">
                     <input id="console-autoscroll-toggle" type="checkbox" checked>
                     <span>自動スクロール</span>

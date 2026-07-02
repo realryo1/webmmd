@@ -13,6 +13,9 @@ export class MmdManager {
 
   activeCameraMotion = null;
   fileMap = new Map(); // relativePath -> blobUrl
+
+  breastPhysicsEnabled = true;
+  breastPhysicsStiffness = 1.0;
   
   constructor(scene, camera, physicsPlugin) {
     this.scene = scene;
@@ -216,6 +219,7 @@ export class MmdManager {
     }
     mesh.computeWorldMatrix(true);
     mmdModel.initializePhysics();
+    this._optimizeBreastPhysicsDirectly(mmdModel, mesh);
     mmdModel.physicsEnabled = true;
 
     const id = "model_" + (this._modelIdCounter++);
@@ -375,6 +379,7 @@ export class MmdManager {
           }
           model.mmdModel.mesh.computeWorldMatrix(true);
           model.mmdModel.initializePhysics();
+          this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
           model.mmdModel.physicsEnabled = true;
         }
       }
@@ -531,27 +536,33 @@ export class MmdManager {
       if (isHair || isBreast || isSkirt || isAccessory) {
         // 質量 (mass) の補正: 小さすぎると他剛体との衝突で投げられて伸びる
         if (isBreast) {
-          rb.mass = Math.max(rb.mass, 0.8);
-          rb.repulsion = 0.02; // 胸は反発をほぼゼロにする
+          rb.mass = Math.max(rb.mass, 1.0); // 自然な重さ
+          rb.repulsion = 0.0; // 胸は反発をゼロにする
           rb.friction = Math.max(rb.friction, 0.8); // 摩擦高め
+          // 他のすべての剛体との物理衝突（めり込み反発）を完全に無効化する
+          rb.collisionMask = 0;
+          // 自然な揺れの減衰
+          rb.linearDamping = Math.max(rb.linearDamping, 0.3);
+          rb.angularDamping = Math.max(rb.angularDamping, 0.3);
         } else if (isHair) {
           rb.mass = Math.max(rb.mass, 0.4);
           rb.repulsion = 0.05;
           rb.friction = Math.max(rb.friction, 0.5);
+          rb.linearDamping = Math.max(rb.linearDamping, 0.15);
+          rb.angularDamping = Math.max(rb.angularDamping, 0.25);
         } else if (isSkirt) {
           rb.mass = Math.max(rb.mass, 0.6);
           rb.repulsion = 0.05;
           rb.friction = Math.max(rb.friction, 0.6);
+          rb.linearDamping = Math.max(rb.linearDamping, 0.15);
+          rb.angularDamping = Math.max(rb.angularDamping, 0.25);
         } else {
           rb.mass = Math.max(rb.mass, 0.3);
           rb.repulsion = 0.05;
           rb.friction = Math.max(rb.friction, 0.5);
+          rb.linearDamping = Math.max(rb.linearDamping, 0.15);
+          rb.angularDamping = Math.max(rb.angularDamping, 0.25);
         }
-
-        // 減衰 (damping) の補正: ブンブン揺れ続けるのを防ぐ
-        rb.linearDamping = Math.max(rb.linearDamping, 0.15);
-        // 角速度ダンピングを少し高めにして安定させる (fps 60換算)
-        rb.angularDamping = Math.max(rb.angularDamping, 0.25);
       }
     }
 
@@ -581,8 +592,9 @@ export class MmdManager {
         let yzLimit = 8 * Math.PI / 180;
 
         if (isBreastJoint) {
-          xLimit = 10 * Math.PI / 180; // 胸はかなり狭く
-          yzLimit = 5 * Math.PI / 180;
+          // 衝突が発生しないため、可動範囲を自然な値（X軸±15度、Y/Z軸±10度）に設定
+          xLimit = 15 * Math.PI / 180;
+          yzLimit = 10 * Math.PI / 180;
         } else if (isSkirtJoint) {
           xLimit = 25 * Math.PI / 180;
           yzLimit = 10 * Math.PI / 180;
@@ -600,6 +612,108 @@ export class MmdManager {
         joint.rotationMin[2] = Math.max(joint.rotationMin[2], -yzLimit);
         joint.rotationMax[2] = Math.min(joint.rotationMax[2], yzLimit);
       }
+    }
+  }
+
+  // 胸剛体の物理を直接最適化（ON/OFFおよび強度反映）
+  _optimizeBreastPhysicsDirectly(mmdModel, mesh) {
+    if (!mmdModel || !mmdModel._physicsModel || !mmdModel._physicsModel._bodies) {
+      console.warn("MmdModel or physicsModel not ready for breast optimization.");
+      return;
+    }
+    const physicsModel = mmdModel._physicsModel;
+    const bodies = physicsModel._bodies;
+    const nodes = physicsModel._nodes;
+    if (!bodies || !nodes) return;
+
+    const rigidBodies = mesh.metadata?.rigidBodies || [];
+    const breastKeywords = ["胸", "おっぱい", "乳", "bust", "breast", "ちち"];
+    const bones = mesh.skeleton ? mesh.skeleton.bones : [];
+    let optimizedCount = 0;
+
+    const enabled = this.breastPhysicsEnabled && this.breastPhysicsStiffness > 0.0;
+    const stiffness = this.breastPhysicsStiffness;
+
+    // 強度に応じたダンピング係数の計算
+    // stiffnessが大きい（柔らかく大きく揺れる）ほどダンピングを小さくする。0のときはほぼ動かない
+    const dampingValue = enabled ? Math.max(0.15, 1.0 - 0.7 * stiffness) : 1.0;
+
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (!node) continue;
+
+      const nodeName = node.name || "";
+      const rb = rigidBodies[i];
+      const rbName = rb ? (rb.name || "") : "";
+      const bone = bones[rb?.boneIndex];
+      const boneName = bone ? (bone.name || "") : "";
+
+      const targetName = (nodeName + "_" + rbName + "_" + boneName).toLowerCase();
+      const isBreast = breastKeywords.some(kw => targetName.includes(kw));
+
+      if (isBreast) {
+        const body = bodies[i];
+        if (body) {
+          if (!enabled) {
+            // OFFの場合: 物理シミュレーションを無効化してFollowBoneに
+            node.physicsMode = 0; // FollowBone
+            if (typeof body.disableSimulation === "function") {
+              body.disableSimulation();
+            }
+            if (body.shape) {
+              body.shape.filterMembershipMask = 0;
+              body.shape.filterCollideMask = 0;
+            }
+            if (typeof body.setGravityFactor === "function") {
+              body.setGravityFactor(0.0);
+            } else {
+              body.gravityFactor = 0.0;
+            }
+          } else {
+            // ONの場合: 物理シミュレーションを有効化
+            node.physicsMode = 1; // Physics
+            if (typeof body.enableSimulation === "function") {
+              body.enableSimulation();
+            }
+
+            // 重力を復元（標準の1.0）
+            if (typeof body.setGravityFactor === "function") {
+              body.setGravityFactor(1.0);
+            } else {
+              body.gravityFactor = 1.0;
+            }
+
+            // 衝突判定はめり込みによる暴走を防ぐため無効化したままとする (これで安定した揺れが保証される)
+            if (body.shape) {
+              body.shape.filterMembershipMask = 0;
+              body.shape.filterCollideMask = 0;
+            }
+
+            // 強度に応じたダンピングの動的適用
+            if (typeof body.setLinearDamping === "function") {
+              body.setLinearDamping(dampingValue);
+            } else {
+              body.linearDamping = dampingValue;
+            }
+            if (typeof body.setAngularDamping === "function") {
+              body.setAngularDamping(dampingValue);
+            } else {
+              body.angularDamping = dampingValue;
+            }
+          }
+          optimizedCount++;
+        }
+      }
+    }
+    console.log(`[Physics Optimization] Breast settings updated. Enabled: ${enabled}, Stiffness: ${stiffness}, Optimized: ${optimizedCount} bodies.`);
+  }
+
+  updateBreastPhysicsSettings(enabled, stiffness) {
+    this.breastPhysicsEnabled = enabled;
+    this.breastPhysicsStiffness = stiffness;
+
+    for (const model of this.deployedModels.values()) {
+      this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
     }
   }
 

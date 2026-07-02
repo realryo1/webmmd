@@ -59,6 +59,7 @@ export class UIManager {
 
   // コンソール要素
   consoleClearButton = null;
+  consoleCopyButton = null;
   consoleAutoscrollToggle = null;
   consoleLogContainer = null;
 
@@ -84,6 +85,9 @@ export class UIManager {
     
     this.gravityMagnitudeInput = document.querySelector(".gravity-magnitude-input");
     this.gravityMagnitudeValue = document.querySelector(".gravity-magnitude-value");
+    this.breastPhysicsToggle = document.querySelector(".breast-physics-toggle");
+    this.breastPhysicsStiffnessInput = document.querySelector(".breast-physics-stiffness-input");
+    this.breastPhysicsStiffnessValue = document.querySelector(".breast-physics-stiffness-value");
     
     this.pixelRatioSelect = document.querySelector(".pixel-ratio-select");
     this.shadowResolutionSelect = document.querySelector(".shadow-resolution-select");
@@ -119,6 +123,8 @@ export class UIManager {
     // 初期UI状態設定
     if (this.colorInput) this.colorInput.value = "#0b1118";
     if (this.gravityMagnitudeInput) this.gravityMagnitudeInput.value = "9.8";
+    if (this.breastPhysicsToggle) this.breastPhysicsToggle.checked = true;
+    if (this.breastPhysicsStiffnessInput) this.breastPhysicsStiffnessInput.value = "1.0";
 
     // シーン管理DOMの初期化
     this.sceneSaveButton = document.getElementById("scene-save-button");
@@ -128,6 +134,7 @@ export class UIManager {
 
     // コンソールDOMの初期化
     this.consoleClearButton = document.getElementById("console-clear-button");
+    this.consoleCopyButton = document.getElementById("console-copy-button");
     this.consoleAutoscrollToggle = document.getElementById("console-autoscroll-toggle");
     this.consoleLogContainer = document.getElementById("console-log-container");
 
@@ -266,6 +273,23 @@ export class UIManager {
       const magnitude = parseFloat(this.gravityMagnitudeInput.value);
       this.gravityMagnitudeValue.textContent = magnitude.toFixed(1);
       this.engine.setGravity(magnitude);
+    });
+
+    // 胸の物理演算トグル
+    this.breastPhysicsToggle?.addEventListener("change", () => {
+      const enabled = this.breastPhysicsToggle.checked;
+      const stiffness = parseFloat(this.breastPhysicsStiffnessInput.value);
+      this.mmdManager.updateBreastPhysicsSettings(enabled, stiffness);
+    });
+
+    // 胸の揺れ強度
+    this.breastPhysicsStiffnessInput?.addEventListener("input", () => {
+      const stiffness = parseFloat(this.breastPhysicsStiffnessInput.value);
+      if (this.breastPhysicsStiffnessValue) {
+        this.breastPhysicsStiffnessValue.textContent = stiffness.toFixed(1);
+      }
+      const enabled = this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true;
+      this.mmdManager.updateBreastPhysicsSettings(enabled, stiffness);
     });
 
     // 画質上限
@@ -1222,7 +1246,9 @@ export class UIManager {
         backgroundColor: this.colorInput ? this.colorInput.value : "#0b1118",
         backgroundMode: this.backgroundModeSelect ? this.backgroundModeSelect.value : "grid",
         shadowEnabled: this.shadowInput ? this.shadowInput.checked : true,
-        gravity: this.gravityMagnitudeInput ? parseFloat(this.gravityMagnitudeInput.value) : 9.8
+        gravity: this.gravityMagnitudeInput ? parseFloat(this.gravityMagnitudeInput.value) : 9.8,
+        breastPhysicsEnabled: this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true,
+        breastPhysicsStiffness: this.breastPhysicsStiffnessInput ? parseFloat(this.breastPhysicsStiffnessInput.value) : 1.0
       }
     };
 
@@ -1256,6 +1282,18 @@ export class UIManager {
           }
           this.engine.setGravity(parseFloat(settings.gravity));
         }
+        if (settings.breastPhysicsEnabled !== undefined && this.breastPhysicsToggle) {
+          this.breastPhysicsToggle.checked = settings.breastPhysicsEnabled;
+        }
+        if (settings.breastPhysicsStiffness !== undefined && this.breastPhysicsStiffnessInput) {
+          this.breastPhysicsStiffnessInput.value = settings.breastPhysicsStiffness;
+          if (this.breastPhysicsStiffnessValue) {
+            this.breastPhysicsStiffnessValue.textContent = parseFloat(settings.breastPhysicsStiffness).toFixed(1);
+          }
+        }
+        const bEnabled = this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true;
+        const bStiffness = this.breastPhysicsStiffnessInput ? parseFloat(this.breastPhysicsStiffnessInput.value) : 1.0;
+        this.mmdManager.updateBreastPhysicsSettings(bEnabled, bStiffness);
       }
 
       // 2. 配置モデルのクリア
@@ -1656,6 +1694,27 @@ export class UIManager {
     this.consoleClearButton?.addEventListener("click", () => {
       if (this.consoleLogContainer) {
         this.consoleLogContainer.innerHTML = "";
+      }
+    });
+
+    // コピーボタンのイベント
+    this.consoleCopyButton?.addEventListener("click", () => {
+      if (this.consoleLogContainer) {
+        const logLines = Array.from(this.consoleLogContainer.querySelectorAll(".console-log-line"))
+          .map(line => line.textContent);
+        const textToCopy = logLines.join("\n");
+        
+        navigator.clipboard.writeText(textToCopy)
+          .then(() => {
+            const originalText = this.consoleCopyButton.textContent;
+            this.consoleCopyButton.textContent = "コピー完了！";
+            setTimeout(() => {
+              this.consoleCopyButton.textContent = originalText;
+            }, 1500);
+          })
+          .catch(err => {
+            console.error("Failed to copy logs: ", err);
+          });
       }
     });
   }
