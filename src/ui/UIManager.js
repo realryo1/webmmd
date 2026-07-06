@@ -22,6 +22,7 @@ export class UIManager {
   shadowResolutionSelect = null;
   vrPassthroughInput = null;
   autoPlayOnMotionToggle = null;
+  physicsDisableToggle = null;
 
   viewerLoading = null;
   statusText = null;
@@ -116,6 +117,13 @@ export class UIManager {
       } else {
         this.resourceMonitorOverlay?.setAttribute("hidden", "");
       }
+    }
+
+    this.physicsDisableToggle = document.querySelector(".physics-disable-toggle");
+    if (this.physicsDisableToggle) {
+      const isDisable = localStorage.getItem("physics-disable-globally") === "true";
+      this.physicsDisableToggle.checked = isDisable;
+      this.mmdManager.setPhysicsDisableGlobally(isDisable);
     }
 
     this.fpsLimitToggle = document.querySelector(".fps-limit-toggle");
@@ -271,6 +279,14 @@ export class UIManager {
         this.resourceMonitorOverlay?.setAttribute("hidden", "");
         this.stopResourceMonitor();
       }
+    });
+
+    // 物理演算完全無効化トグルイベント
+    this.physicsDisableToggle?.addEventListener("change", () => {
+      const isChecked = this.physicsDisableToggle.checked;
+      localStorage.setItem("physics-disable-globally", isChecked ? "true" : "false");
+      this.mmdManager.setPhysicsDisableGlobally(isChecked);
+      this.setStatusText(`物理演算を${isChecked ? "完全に無効化" : "有効化"}しました。`);
     });
 
     // FPS制限トグルイベント
@@ -465,13 +481,43 @@ export class UIManager {
 
     // パネルの折りたたみ制御
     const panelHeaders = document.querySelectorAll(".panel-header");
+    let panelStates = {};
+    try {
+      const saved = localStorage.getItem("webmmd-panel-states");
+      if (saved) {
+        panelStates = JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn("Failed to load panel states:", e);
+    }
+
     panelHeaders.forEach(header => {
-      header.addEventListener("click", () => {
-        const panel = header.closest(".panel");
-        if (panel) {
-          panel.classList.toggle("collapsed");
+      const panel = header.closest(".panel");
+      if (panel) {
+        const sectionId = panel.getAttribute("data-section-id");
+        if (sectionId && panelStates[sectionId] !== undefined) {
+          if (panelStates[sectionId]) {
+            panel.classList.add("collapsed");
+          } else {
+            panel.classList.remove("collapsed");
+          }
         }
-      });
+
+        header.addEventListener("click", () => {
+          panel.classList.toggle("collapsed");
+          const currentSectionId = panel.getAttribute("data-section-id");
+          if (currentSectionId) {
+            try {
+              const saved = localStorage.getItem("webmmd-panel-states");
+              const states = saved ? JSON.parse(saved) : {};
+              states[currentSectionId] = panel.classList.contains("collapsed");
+              localStorage.setItem("webmmd-panel-states", JSON.stringify(states));
+            } catch (e) {
+              console.warn("Failed to save panel states:", e);
+            }
+          }
+        });
+      }
     });
 
     // ユーザーデータ完全リセットボタン
