@@ -249,9 +249,30 @@ export class MmdManager {
       model.audio.pause();
       model.audio = null;
     }
+    // アニメーションを明示的にクリア
+    model.mmdModel.setAnimation(null);
     for (const key of Array.from(model.motions.keys())) {
       this.removeMotion(key, modelId);
     }
+
+    // 再生時間を0にリセット
+    this.mmdRuntime.seekAnimation(0);
+
+    // 物理を無効化してスケルトンを初期姿勢に戻し、物理を再構築
+    model.mmdModel.physicsEnabled = false;
+    if (model.mesh.skeleton) {
+      model.mesh.skeleton.returnToRestPose();
+    }
+    model.mesh.computeWorldMatrix(true);
+
+    // すべてのIKソルバーの状態を 1 (有効) にリセット
+    if (model.mmdModel.ikSolverStates) {
+      model.mmdModel.ikSolverStates.fill(1);
+    }
+
+    model.mmdModel.initializePhysics();
+    this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
+    model.mmdModel.physicsEnabled = true;
 
     const vmdBlobUrl = this.resolvePath(vmdFileName);
     if (!vmdBlobUrl) {
