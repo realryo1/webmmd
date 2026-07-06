@@ -755,3 +755,94 @@ body.pseudo-fullscreen .viewer {
 .motion-list-container::-webkit-scrollbar {
     display: none;
 }
+
+/* リソースモニタオーバーレイのスタイル */
+.resource-monitor-overlay {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateY(0);
+    opacity: 1;
+    font-family: 'Outfit', 'Inter', ui-sans-serif, system-ui, sans-serif;
+    min-width: 110px;
+}
+
+.resource-monitor-overlay[hidden] {
+    display: none !important;
+}
+
+/* フェードイン表示用のアニメーションクラス */
+.resource-monitor-overlay:not([hidden]) {
+    animation: monitor-fade-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes monitor-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.resource-monitor-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    color: #e2e8f0;
+}
+
+.resource-monitor-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.resource-monitor-value {
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #38bdf8; /* 明るいシアン */
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+}
+
+#monitor-mem {
+    color: #34d399; /* 明るいエメラルド */
+    text-shadow: 0 0 10px rgba(52, 211, 153, 0.3);
+}
+
+#monitor-draw {
+    color: #fbbf24; /* イエロー */
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+}
+
+#monitor-update {
+    color: #f97316; /* オレンジ */
+    text-shadow: 0 0 10px rgba(249, 115, 22, 0.3);
+}
+
+.resource-monitor-unit {
+    font-size: 10px;
+    font-weight: 500;
+    color: #64748b;
+    margin-left: 2px;
+}

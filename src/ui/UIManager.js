@@ -98,6 +98,42 @@ export class UIManager {
       this.autoPlayOnMotionToggle.checked = localStorage.getItem("auto-play-on-motion") === "true";
     }
 
+    this.resourceMonitorToggle = document.querySelector(".resource-monitor-toggle");
+    this.resourceMonitorOverlay = document.getElementById("resource-monitor-overlay");
+    this.monitorFps = document.getElementById("monitor-fps");
+    this.monitorMem = document.getElementById("monitor-mem");
+    this.monitorMemContainer = document.getElementById("monitor-mem-container");
+    this.monitorDraw = document.getElementById("monitor-draw");
+    this.monitorUpdate = document.getElementById("monitor-update");
+    if (this.resourceMonitorToggle) {
+      const isEnabled = localStorage.getItem("resource-monitor-enabled") === "true";
+      this.resourceMonitorToggle.checked = isEnabled;
+      if (isEnabled) {
+        this.resourceMonitorOverlay?.removeAttribute("hidden");
+        // UIManagerのコンストラクタ実行時点では engine がまだ完全に動いていない場合があるので、少し待つか
+        // 直接 start を呼び出す
+        this.startResourceMonitor();
+      } else {
+        this.resourceMonitorOverlay?.setAttribute("hidden", "");
+      }
+    }
+
+    this.fpsLimitToggle = document.querySelector(".fps-limit-toggle");
+    this.fpsLimitInput = document.querySelector(".fps-limit-input");
+    if (this.fpsLimitToggle && this.fpsLimitInput) {
+      const isEnabled = localStorage.getItem("fps-limit-enabled") === "true";
+      const savedVal = localStorage.getItem("fps-limit-value") || "60";
+      
+      this.fpsLimitToggle.checked = isEnabled;
+      this.fpsLimitInput.value = savedVal;
+      
+      this.fpsLimitInput.disabled = !isEnabled;
+
+      if (this.engine) {
+        this.engine.setFpsLimit(isEnabled ? parseInt(savedVal, 10) : null);
+      }
+    }
+
     this.viewerLoading = document.querySelector(".viewer-loading");
     this.statusText = document.querySelector(".status");
     this.fullscreenButton = document.querySelector(".fullscreen-toggle");
@@ -221,6 +257,65 @@ export class UIManager {
     this.motionInput?.addEventListener("change", async () => {
       if (this.motionInput.files && this.motionInput.files.length > 0) {
         await this.handleMotionLoad(this.motionInput.files);
+      }
+    });
+
+    // リソースモニタトグルイベント
+    this.resourceMonitorToggle?.addEventListener("change", () => {
+      const isChecked = this.resourceMonitorToggle.checked;
+      localStorage.setItem("resource-monitor-enabled", isChecked ? "true" : "false");
+      if (isChecked) {
+        this.resourceMonitorOverlay?.removeAttribute("hidden");
+        this.startResourceMonitor();
+      } else {
+        this.resourceMonitorOverlay?.setAttribute("hidden", "");
+        this.stopResourceMonitor();
+      }
+    });
+
+    // FPS制限トグルイベント
+    this.fpsLimitToggle?.addEventListener("change", () => {
+      const isChecked = this.fpsLimitToggle.checked;
+      localStorage.setItem("fps-limit-enabled", isChecked ? "true" : "false");
+      if (this.fpsLimitInput) {
+        this.fpsLimitInput.disabled = !isChecked;
+      }
+      
+      if (this.engine) {
+        const val = this.fpsLimitInput ? parseInt(this.fpsLimitInput.value, 10) : 60;
+        this.engine.setFpsLimit(isChecked ? val : null);
+      }
+    });
+
+    // FPS制限入力値変更イベント
+    this.fpsLimitInput?.addEventListener("input", () => {
+      let val = parseInt(this.fpsLimitInput.value, 10);
+      if (isNaN(val)) return;
+
+      // 入力中の暫定的な値でも反映するが、範囲内にする
+      let targetVal = val;
+      if (targetVal < 1) targetVal = 1;
+      if (targetVal > 240) targetVal = 240;
+
+      localStorage.setItem("fps-limit-value", targetVal.toString());
+
+      if (this.engine && this.fpsLimitToggle && this.fpsLimitToggle.checked) {
+        this.engine.setFpsLimit(targetVal);
+      }
+    });
+
+    this.fpsLimitInput?.addEventListener("blur", () => {
+      let val = parseInt(this.fpsLimitInput.value, 10);
+      if (isNaN(val) || val < 1) {
+        val = 60;
+      } else if (val > 240) {
+        val = 240;
+      }
+      this.fpsLimitInput.value = val;
+      localStorage.setItem("fps-limit-value", val.toString());
+
+      if (this.engine && this.fpsLimitToggle && this.fpsLimitToggle.checked) {
+        this.engine.setFpsLimit(val);
       }
     });
 
@@ -1933,6 +2028,62 @@ export class UIManager {
           });
       }
     });
+  }
+
+  resourceMonitorActive = false;
+
+  startResourceMonitor() {
+    if (this.resourceMonitorActive) return;
+    this.resourceMonitorActive = true;
+
+    const hasMemoryApi = window.performance && window.performance.memory;
+    if (hasMemoryApi && this.monitorMemContainer) {
+      this.monitorMemContainer.removeAttribute("hidden");
+    }
+
+    let lastTime = performance.now();
+    let frameCount = 0;
+
+    const checkFps = () => {
+      if (!this.resourceMonitorActive) return;
+      frameCount++;
+      const now = performance.now();
+      if (now - lastTime >= 1000) {
+        let fps = 0;
+        if (this.engine && this.engine.engine && typeof this.engine.engine.getFps === "function") {
+          fps = Math.round(this.engine.engine.getFps());
+        } else {
+          fps = Math.round((frameCount * 1000) / (now - lastTime));
+        }
+
+        if (this.monitorFps) {
+          this.monitorFps.textContent = fps;
+        }
+        frameCount = 0;
+        lastTime = now;
+
+        if (hasMemoryApi && this.monitorMem) {
+          const usedMem = (performance.memory.usedJSHeapSize / 1048576).toFixed(1);
+          this.monitorMem.textContent = usedMem;
+        }
+
+        if (this.engine) {
+          if (this.monitorDraw && typeof this.engine.drawTime === "number") {
+            this.monitorDraw.textContent = this.engine.drawTime.toFixed(1);
+          }
+          if (this.monitorUpdate && typeof this.engine.updateTime === "number") {
+            this.monitorUpdate.textContent = this.engine.updateTime.toFixed(1);
+          }
+        }
+      }
+      requestAnimationFrame(checkFps);
+    };
+
+    requestAnimationFrame(checkFps);
+  }
+
+  stopResourceMonitor() {
+    this.resourceMonitorActive = false;
   }
 }
 

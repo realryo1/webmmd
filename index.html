@@ -176,6 +176,19 @@
                   <input class="auto-play-on-motion-toggle" type="checkbox">
                   <span>モーションを適用したら自動再生</span>
                 </label>
+                <label class="checkbox-field field--toggle">
+                  <input class="resource-monitor-toggle" type="checkbox">
+                  <span>リソースモニタを有効化</span>
+                </label>
+                <hr style="border:0; border-top:1px solid #333; margin:0.8em 0;">
+                <label class="checkbox-field field--toggle">
+                  <input class="fps-limit-toggle" type="checkbox">
+                  <span>FPS制限を有効化</span>
+                </label>
+                <label class="field" style="margin-top:0.8em;">
+                  <span>制限値 (1-240 FPS)</span>
+                  <input class="fps-limit-input" type="number" min="1" max="240" step="1" value="60" style="padding: 4px 8px; background: #222a36; border: 1px solid #3d4a5e; color: #fff; border-radius: 4px; width: 80px;">
+                </label>
                 <button class="action-button clear-service-worker-button" type="button"
                   style="margin-top:0.5em;background:#666;color:#fff">
                   アプリのキャッシュを強制更新
@@ -252,6 +265,27 @@
           </button>
         </div>
         <canvas id="renderCanvas" style="display: block; width: 100%; height: 100%; touch-action: none;"></canvas>
+        <div class="resource-monitor-overlay" id="resource-monitor-overlay" hidden>
+          <div class="resource-monitor-item">
+            <span class="resource-monitor-label">FPS</span>
+            <span class="resource-monitor-value" id="monitor-fps">0</span>
+          </div>
+          <div class="resource-monitor-item" id="monitor-mem-container" hidden>
+            <span class="resource-monitor-label">MEM</span>
+            <span class="resource-monitor-value" id="monitor-mem">0.0</span>
+            <span class="resource-monitor-unit">MB</span>
+          </div>
+          <div class="resource-monitor-item">
+            <span class="resource-monitor-label">Draw</span>
+            <span class="resource-monitor-value" id="monitor-draw">0.0</span>
+            <span class="resource-monitor-unit">ms</span>
+          </div>
+          <div class="resource-monitor-item">
+            <span class="resource-monitor-label">Update</span>
+            <span class="resource-monitor-value" id="monitor-update">0.0</span>
+            <span class="resource-monitor-unit">ms</span>
+          </div>
+        </div>
       </main>
     </div>
   </div>

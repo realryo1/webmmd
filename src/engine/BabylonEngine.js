@@ -29,6 +29,49 @@ export class BabylonEngine {
   ground = null;
   gridMaterial = null;
   solidMaterial = null;
+  fpsLimit = null;
+  updateTime = 0;
+  drawTime = 0;
+
+  setFpsLimit(limit) {
+    this.fpsLimit = typeof limit === "number" && !isNaN(limit) ? limit : null;
+    this.updateAnimationFrameRequester();
+  }
+
+  updateAnimationFrameRequester() {
+    if (!this.engine) return;
+
+    if (this.fpsLimit === null) {
+      this.engine.customAnimationFrameRequester = null;
+      return;
+    }
+
+    const limit = this.fpsLimit;
+    let lastTime = performance.now();
+    const interval = 1000 / limit;
+
+    this.engine.customAnimationFrameRequester = {
+      requestID: null,
+      requestAnimationFrame: (callback) => {
+        const loop = () => {
+          const now = performance.now();
+          const delta = now - lastTime;
+          if (delta >= interval) {
+            lastTime = now - (delta % interval);
+            callback();
+          } else {
+            this.engine.customAnimationFrameRequester.requestID = requestAnimationFrame(loop);
+          }
+        };
+        this.engine.customAnimationFrameRequester.requestID = requestAnimationFrame(loop);
+      },
+      cancelAnimationFrame: (id) => {
+        if (this.engine.customAnimationFrameRequester && this.engine.customAnimationFrameRequester.requestID) {
+          cancelAnimationFrame(this.engine.customAnimationFrameRequester.requestID);
+        }
+      }
+    };
+  }
 
   // Physics debugging
   _physicsViewer = null;
@@ -99,10 +142,27 @@ export class BabylonEngine {
 
     this.ground.material = this.gridMaterial;
 
+    // パフォーマンス計測用のイベントフック
+    let updateStart = 0;
+    let drawStart = 0;
+    this.scene.onBeforeRenderObservable.add(() => {
+      updateStart = performance.now();
+    });
+    this.scene.onBeforeDrawPhaseObservable.add(() => {
+      const now = performance.now();
+      this.updateTime = now - updateStart;
+      drawStart = now;
+    });
+    this.scene.onAfterRenderObservable.add(() => {
+      this.drawTime = performance.now() - drawStart;
+    });
+
     // 描画ループの開始
     this.engine.runRenderLoop(() => {
       this.scene.render();
     });
+
+    this.updateAnimationFrameRequester();
 
     window.addEventListener("resize", this.handleResize);
     document.addEventListener("fullscreenchange", this.handleFullscreenChange);
