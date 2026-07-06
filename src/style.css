@@ -743,3 +743,15 @@ body.pseudo-fullscreen .viewer {
 .console-log-line.log-error {
     color: #ff8f8f;
 }
+
+/* モーフ設定とモーション設定のリストのスクロールバーを完全非表示にする */
+.morph-list-container,
+.motion-list-container {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    resize: vertical;
+}
+.morph-list-container::-webkit-scrollbar,
+.motion-list-container::-webkit-scrollbar {
+    display: none;
+}
