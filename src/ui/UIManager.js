@@ -96,6 +96,11 @@ export class UIManager {
     this.pixelRatioSelect = document.querySelector(".pixel-ratio-select");
     this.shadowResolutionSelect = document.querySelector(".shadow-resolution-select");
     this.vrPassthroughInput = document.querySelector(".vr-passthrough-toggle");
+    if (this.vrPassthroughInput) {
+      const isEnabled = localStorage.getItem("vr-passthrough-enabled") === "true";
+      this.vrPassthroughInput.checked = isEnabled;
+    }
+
     this.autoPlayOnMotionToggle = document.querySelector(".auto-play-on-motion-toggle");
     if (this.autoPlayOnMotionToggle) {
       this.autoPlayOnMotionToggle.checked = localStorage.getItem("auto-play-on-motion") === "true";
@@ -451,7 +456,9 @@ export class UIManager {
 
     // パススルー
     this.vrPassthroughInput?.addEventListener("change", () => {
-      this.xrManager.setPassthroughEnabled(this.vrPassthroughInput.checked);
+      const isChecked = this.vrPassthroughInput.checked;
+      localStorage.setItem("vr-passthrough-enabled", isChecked ? "true" : "false");
+      this.xrManager.setPassthroughEnabled(isChecked);
     });
 
     // モーション自動再生

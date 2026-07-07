@@ -307,6 +307,9 @@ export class MmdManager {
     const initialX = this.deployedModels.size * 6.0;
     mesh.position.set(initialX, 0, 0);
 
+    // モデルのスケールは常に等倍（1.0）
+    mesh.scaling.set(1.0, 1.0, 1.0);
+
     // シャドウジェネレーターにメッシュを追加
     const shadowGenerator = this.scene.lights.find(l => l.name === "dirLight")?._shadowGenerator;
     if (shadowGenerator) {
@@ -795,6 +798,7 @@ export class MmdManager {
     }
     this.fileMap.clear();
   }
+
 
   // PMXメタデータ（剛体・ジョイント）を走査して自動最適化する
   _optimizeModelPhysicsMetadata(mesh) {

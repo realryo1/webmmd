@@ -56,6 +56,8 @@ async function main() {
 
   // 3. WebXR (VR) 管理クラスの初期化
   const xrManager = new XrManager(babylonEngine.scene, babylonEngine.ground);
+  xrManager.mmdManager = mmdManager;
+  xrManager.babylonEngine = babylonEngine;
   const vrButton = document.getElementById("overlay-vr-button");
   await xrManager.initialize(vrButton);
 
