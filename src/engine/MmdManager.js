@@ -40,6 +40,7 @@ export class MmdManager {
   breastPhysicsStiffness = 1.0;
   physicsDisableGlobally = false;
   loopEnabled = false;
+  boneLogEnabled = false;
   
   constructor(scene, camera, physicsPlugin) {
     this.scene = scene;
@@ -120,7 +121,9 @@ export class MmdManager {
       window.addEventListener("keydown", (e) => {
         if (e.key === " " || e.code === "Space") {
           setTimeout(() => {
-            this.dumpCurrentPoseAndMotion();
+            if (this.boneLogEnabled) {
+              this.dumpCurrentPoseAndMotion();
+            }
           }, 100);
         }
       });
@@ -377,7 +380,7 @@ export class MmdManager {
     // モデル読み込み時のボーン＆IK詳細ログの出力
     console.log(`%c[MMD Model Loaded] ${pmxFileName} (ID: ${id})`, "color: #4CAF50; font-weight: bold; font-size: 1.2em;");
     const bonesSource = mmdModel.runtimeBones || (mesh.skeleton ? mesh.skeleton.bones : null);
-    if (bonesSource) {
+    if (this.boneLogEnabled && bonesSource) {
       console.log(` - Total Bones: ${bonesSource.length}`);
       
       // 最初のボーンのプロパティ構成を出力してデバッグしやすくする
@@ -439,7 +442,7 @@ export class MmdManager {
       console.groupEnd();
     }
 
-    if (mmdModel) {
+    if (this.boneLogEnabled && mmdModel) {
       console.group(`IK Solver Settings for ${pmxFileName}`);
       // mmdModel.runtimeBones または内部構造から IK 情報を抽出
       if (mmdModel.runtimeBones) {
@@ -557,7 +560,7 @@ export class MmdManager {
 
     // モーション読み込み時のログ出力
     console.log(`%c[MMD Motion Loaded] ${vmdFileName} for Model: ${model.name}`, "color: #2196F3; font-weight: bold; font-size: 1.2em;");
-    if (animation) {
+    if (this.boneLogEnabled && animation) {
       console.log("Raw Motion Object:", animation);
       
       const tracks = [];
@@ -591,7 +594,9 @@ export class MmdManager {
     }
 
     // _currentAnimation の内部バインドマップをダンプ
-    this._dumpBindMaps(model, vmdFileName);
+    if (this.boneLogEnabled) {
+      this._dumpBindMaps(model, vmdFileName);
+    }
   }
 
   async loadCameraMotion(vmdFileName) {
@@ -1125,6 +1130,7 @@ export class MmdManager {
   }
 
   dumpCurrentPoseAndMotion() {
+    if (!this.boneLogEnabled) return;
     const runtimeTime = this.mmdRuntime.currentTime;
     const isPlaying = this.mmdRuntime.isAnimationPlaying;
     const frameIndex = runtimeTime * 30; // 30fps VMD frame

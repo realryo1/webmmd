@@ -192,6 +192,15 @@ export class UIManager {
     this.consoleClearButton = document.getElementById("console-clear-button");
     this.consoleCopyButton = document.getElementById("console-copy-button");
     this.consoleAutoscrollToggle = document.getElementById("console-autoscroll-toggle");
+    this.consoleBonelogToggle = document.getElementById("console-bonelog-toggle");
+    if (this.consoleBonelogToggle) {
+      this.consoleBonelogToggle.checked = false;
+      this.consoleBonelogToggle.addEventListener("change", (e) => {
+        if (this.mmdManager) {
+          this.mmdManager.boneLogEnabled = e.target.checked;
+        }
+      });
+    }
     this.consoleLogContainer = document.getElementById("console-log-container");
 
     this.updateDeployedModelsList();
