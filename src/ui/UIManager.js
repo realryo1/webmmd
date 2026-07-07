@@ -88,8 +88,10 @@ export class UIManager {
     this.gravityMagnitudeInput = document.querySelector(".gravity-magnitude-input");
     this.gravityMagnitudeValue = document.querySelector(".gravity-magnitude-value");
     this.breastPhysicsToggle = document.querySelector(".breast-physics-toggle");
-    this.breastPhysicsStiffnessInput = document.querySelector(".breast-physics-stiffness-input");
-    this.breastPhysicsStiffnessValue = document.querySelector(".breast-physics-stiffness-value");
+    this.breastPhysicsFpsInput = document.querySelector(".breast-physics-fps-input");
+    this.breastPhysicsFpsValue = document.querySelector(".breast-physics-fps-value");
+    this.breastPhysicsInertiaInput = document.querySelector(".breast-physics-inertia-input");
+    this.breastPhysicsInertiaValue = document.querySelector(".breast-physics-inertia-value");
     
     this.pixelRatioSelect = document.querySelector(".pixel-ratio-select");
     this.shadowResolutionSelect = document.querySelector(".shadow-resolution-select");
@@ -410,18 +412,31 @@ export class UIManager {
     // 胸の物理演算トグル
     this.breastPhysicsToggle?.addEventListener("change", () => {
       const enabled = this.breastPhysicsToggle.checked;
-      const stiffness = parseFloat(this.breastPhysicsStiffnessInput.value);
-      this.mmdManager.updateBreastPhysicsSettings(enabled, stiffness);
+      const fps = this.breastPhysicsFpsInput ? parseInt(this.breastPhysicsFpsInput.value, 10) : 60;
+      const inertia = this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0;
+      this.mmdManager.updateBreastPhysicsSettings(enabled, fps, inertia);
     });
 
-    // 胸の揺れ強度
-    this.breastPhysicsStiffnessInput?.addEventListener("input", () => {
-      const stiffness = parseFloat(this.breastPhysicsStiffnessInput.value);
-      if (this.breastPhysicsStiffnessValue) {
-        this.breastPhysicsStiffnessValue.textContent = stiffness.toFixed(1);
+    // 胸の判定フレームレート
+    this.breastPhysicsFpsInput?.addEventListener("input", () => {
+      const fps = parseInt(this.breastPhysicsFpsInput.value, 10);
+      if (this.breastPhysicsFpsValue) {
+        this.breastPhysicsFpsValue.textContent = fps;
       }
       const enabled = this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true;
-      this.mmdManager.updateBreastPhysicsSettings(enabled, stiffness);
+      const inertia = this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0;
+      this.mmdManager.updateBreastPhysicsSettings(enabled, fps, inertia);
+    });
+
+    // 胸の慣性力倍率
+    this.breastPhysicsInertiaInput?.addEventListener("input", () => {
+      const inertia = parseFloat(this.breastPhysicsInertiaInput.value);
+      if (this.breastPhysicsInertiaValue) {
+        this.breastPhysicsInertiaValue.textContent = inertia.toFixed(1);
+      }
+      const enabled = this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true;
+      const fps = this.breastPhysicsFpsInput ? parseInt(this.breastPhysicsFpsInput.value, 10) : 60;
+      this.mmdManager.updateBreastPhysicsSettings(enabled, fps, inertia);
     });
 
     // 画質上限
@@ -1628,7 +1643,8 @@ export class UIManager {
         shadowEnabled: this.shadowInput ? this.shadowInput.checked : true,
         gravity: this.gravityMagnitudeInput ? parseFloat(this.gravityMagnitudeInput.value) : 9.8,
         breastPhysicsEnabled: this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true,
-        breastPhysicsStiffness: this.breastPhysicsStiffnessInput ? parseFloat(this.breastPhysicsStiffnessInput.value) : 1.0
+        breastPhysicsFps: this.breastPhysicsFpsInput ? parseInt(this.breastPhysicsFpsInput.value, 10) : 60,
+        breastPhysicsInertia: this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0
       }
     };
 
@@ -1665,15 +1681,22 @@ export class UIManager {
         if (settings.breastPhysicsEnabled !== undefined && this.breastPhysicsToggle) {
           this.breastPhysicsToggle.checked = settings.breastPhysicsEnabled;
         }
-        if (settings.breastPhysicsStiffness !== undefined && this.breastPhysicsStiffnessInput) {
-          this.breastPhysicsStiffnessInput.value = settings.breastPhysicsStiffness;
-          if (this.breastPhysicsStiffnessValue) {
-            this.breastPhysicsStiffnessValue.textContent = parseFloat(settings.breastPhysicsStiffness).toFixed(1);
+        if (settings.breastPhysicsFps !== undefined && this.breastPhysicsFpsInput) {
+          this.breastPhysicsFpsInput.value = settings.breastPhysicsFps;
+          if (this.breastPhysicsFpsValue) {
+            this.breastPhysicsFpsValue.textContent = settings.breastPhysicsFps;
+          }
+        }
+        if (settings.breastPhysicsInertia !== undefined && this.breastPhysicsInertiaInput) {
+          this.breastPhysicsInertiaInput.value = settings.breastPhysicsInertia;
+          if (this.breastPhysicsInertiaValue) {
+            this.breastPhysicsInertiaValue.textContent = parseFloat(settings.breastPhysicsInertia).toFixed(1);
           }
         }
         const bEnabled = this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true;
-        const bStiffness = this.breastPhysicsStiffnessInput ? parseFloat(this.breastPhysicsStiffnessInput.value) : 1.0;
-        this.mmdManager.updateBreastPhysicsSettings(bEnabled, bStiffness);
+        const bFps = this.breastPhysicsFpsInput ? parseInt(this.breastPhysicsFpsInput.value, 10) : 60;
+        const bInertia = this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0;
+        this.mmdManager.updateBreastPhysicsSettings(bEnabled, bFps, bInertia);
       }
 
       // 2. 配置モデルのクリア

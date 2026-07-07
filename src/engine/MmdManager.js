@@ -37,7 +37,8 @@ export class MmdManager {
   fileMap = new Map(); // relativePath -> blobUrl
 
   breastPhysicsEnabled = true;
-  breastPhysicsStiffness = 1.0;
+  breastPhysicsFps = 60;
+  breastPhysicsInertia = 1.0;
   physicsDisableGlobally = false;
   loopEnabled = false;
   boneLogEnabled = false;
@@ -941,12 +942,15 @@ export class MmdManager {
     const bones = mesh.skeleton ? mesh.skeleton.bones : [];
     let optimizedCount = 0;
 
-    const enabled = this.breastPhysicsEnabled && this.breastPhysicsStiffness > 0.0;
-    const stiffness = this.breastPhysicsStiffness;
+    const enabled = this.breastPhysicsEnabled && this.breastPhysicsInertia > 0.0;
+    const fps = this.breastPhysicsFps || 60;
+    const inertia = this.breastPhysicsInertia;
 
-    // 強度に応じたダンピング係数の計算
-    // stiffnessが大きい（柔らかく大きく揺れる）ほどダンピングを小さくする。0のときはほぼ動かない
-    const dampingValue = enabled ? Math.max(0.15, 1.0 - 0.7 * stiffness) : 1.0;
+    // 揺れやすさ係数 shakeFactor = inertia * (60 / fps)
+    const shakeFactor = inertia * (60 / fps);
+
+    // 揺れやすさ係数に応じたダンピング係数の計算
+    const dampingValue = enabled ? Math.max(0.05, 1.0 - 0.7 * shakeFactor) : 1.0;
 
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
@@ -1015,7 +1019,7 @@ export class MmdManager {
         }
       }
     }
-    console.log(`[Physics Optimization] Breast settings updated. Enabled: ${enabled}, Stiffness: ${stiffness}, Optimized: ${optimizedCount} bodies.`);
+    console.log(`[Physics Optimization] Breast settings updated. Enabled: ${enabled}, Fps: ${fps}, Inertia: ${inertia}, Optimized: ${optimizedCount} bodies.`);
   }
 
   // 体幹剛体の物理を直接最適化（物理演算による上書きを完全に防ぐ）
@@ -1072,9 +1076,10 @@ export class MmdManager {
     console.log(`[Physics Optimization] Body base settings updated. Optimized: ${optimizedCount} bodies.`);
   }
 
-  updateBreastPhysicsSettings(enabled, stiffness) {
+  updateBreastPhysicsSettings(enabled, fps, inertia) {
     this.breastPhysicsEnabled = enabled;
-    this.breastPhysicsStiffness = stiffness;
+    this.breastPhysicsFps = fps;
+    this.breastPhysicsInertia = inertia;
 
     for (const model of this.deployedModels.values()) {
       this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
