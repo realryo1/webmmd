@@ -1,10 +1,32 @@
 import { SceneLoader, FileTools, Vector3, Quaternion } from "@babylonjs/core";
 import { MmdRuntime, MmdPhysics, VmdLoader } from "babylon-mmd";
 
+// 1x1透明PNGのBase64データからBlob URLを生成するヘルパー
+const DUMMY_PNG_DATA = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+let dummyBlobUrl = null;
+function getDummyBlobUrl() {
+  if (!dummyBlobUrl && typeof window !== "undefined") {
+    try {
+      const byteString = atob(DUMMY_PNG_DATA.split(',')[1]);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: 'image/png' });
+      dummyBlobUrl = URL.createObjectURL(blob);
+    } catch (e) {
+      console.warn("Failed to create dummy texture blob", e);
+    }
+  }
+  return dummyBlobUrl;
+}
+
 export class MmdManager {
   scene = null;
   camera = null;
   physicsPlugin = null;
+  mmdPhysics = null;
   
   mmdRuntime = null;
   deployedModels = new Map(); // id -> { id, mesh, mmdModel, name, motions: Map, shadowEnabled: bool, audio: Audio }
@@ -16,6 +38,7 @@ export class MmdManager {
 
   breastPhysicsEnabled = true;
   breastPhysicsStiffness = 1.0;
+  physicsDisableGlobally = false;
   
   constructor(scene, camera, physicsPlugin) {
     this.scene = scene;
@@ -24,6 +47,7 @@ export class MmdManager {
 
     // MmdRuntimeの初期化
     const mmdPhysics = new MmdPhysics(scene);
+    this.mmdPhysics = mmdPhysics;
     this.mmdRuntime = new MmdRuntime(scene, mmdPhysics);
     this.mmdRuntime.register(scene);
 
@@ -78,6 +102,17 @@ export class MmdManager {
         }
       }
     });
+
+    // スペースキー押下時のダンプリスナ登録
+    if (typeof window !== "undefined") {
+      window.addEventListener("keydown", (e) => {
+        if (e.key === " " || e.code === "Space") {
+          setTimeout(() => {
+            this.dumpCurrentPoseAndMotion();
+          }, 100);
+        }
+      });
+    }
   }
 
   // ファイルをマップに追加（相対パス -> { blobUrl, file }）
@@ -114,48 +149,102 @@ export class MmdManager {
     const urlSegments = cleanUrl.split("/").filter(s => s && s !== ".");
     if (urlSegments.length === 0) return null;
 
-    // 1. 各ファイルキーに対してインテリジェントにセグメント比較を行う
+    const urlFileName = urlSegments[urlSegments.length - 1];
+    
+    const getBaseName = (name) => {
+      const idx = name.lastIndexOf('.');
+      return idx === -1 ? name : name.substring(0, idx);
+    };
+
+    const isNonImageExt = (name) => {
+      const ext = name.split('.').pop()?.toLowerCase();
+      return ext === 'sai' || ext === 'psd' || ext === 'txt' || ext === 'zip';
+    };
+
+    const urlBaseName = getBaseName(urlFileName);
+    let bestMatchEntry = null;
+    let maxScore = -9999;
+    let isExactMatchFound = false;
+
     for (const [key, entry] of this.fileMap.entries()) {
       const keySegments = key.split("/").filter(s => s && s !== ".");
+      if (keySegments.length === 0) continue;
+
+      const keyFileName = keySegments[keySegments.length - 1];
+      const keyBaseName = getBaseName(keyFileName);
       
-      let match = true;
+      const isExact = (keyFileName === urlFileName);
+      const isBaseMatch = (keyBaseName === urlBaseName);
+
+      if (!isExact && !isBaseMatch) continue;
+
+      // 既に完全一致が見つかっているのに、ベース名一致（曖昧一致）のキーを処理しようとしている場合はスキップ
+      if (isExactMatchFound && !isExact) continue;
+
+      // フォルダ構造のスコア計算
+      let score = 0;
       let urlIdx = urlSegments.length - 1;
       let keyIdx = keySegments.length - 1;
-      
+
       while (urlIdx >= 0 && keyIdx >= 0) {
         const uSeg = urlSegments[urlIdx];
         const kSeg = keySegments[keyIdx];
-        
-        // ".." の場合は親ディレクトリを1つスキップする
+
         if (uSeg === "..") {
           urlIdx--;
           keyIdx--;
           continue;
         }
-        
-        if (uSeg !== kSeg) {
-          match = false;
-          break;
+
+        // 最後の要素（ファイル名）の比較は、完全一致かベース名一致かで分ける
+        if (urlIdx === urlSegments.length - 1) {
+          if (isExact || isBaseMatch) {
+            score++;
+          } else {
+            break;
+          }
+        } else {
+          if (uSeg === kSeg) {
+            score++;
+          } else {
+            break;
+          }
         }
         urlIdx--;
         keyIdx--;
       }
-      
-      // すべての urlSegments が keySegments の末尾に正しく一致した場合にマッチとする
-      if (match && urlIdx < 0) {
-        return entry.blobUrl;
+
+      // 非画像拡張子（.sai 等）の場合は、スコアを大幅に低く見積もる
+      let finalScore = score;
+      if (isNonImageExt(keyFileName)) {
+        finalScore -= 100;
+      }
+
+      // 完全一致が見つかったら、これまでの曖昧一致の結果をクリアして完全一致を最優先する
+      if (isExact && !isExactMatchFound) {
+        isExactMatchFound = true;
+        maxScore = finalScore;
+        bestMatchEntry = entry;
+      } else if (finalScore > maxScore) {
+        maxScore = finalScore;
+        bestMatchEntry = entry;
       }
     }
 
-    // 2. 最後のフォールバックとして、ファイル名単体での一致を見る
-    const urlFileName = urlSegments[urlSegments.length - 1];
-    for (const [key, entry] of this.fileMap.entries()) {
-      const keySegments = key.split("/").filter(s => s && s !== ".");
-      const keyFileName = keySegments[keySegments.length - 1];
-      if (keyFileName === urlFileName) {
-        return entry.blobUrl;
+    if (bestMatchEntry) {
+      return bestMatchEntry.blobUrl;
+    }
+
+    // 解決に失敗したテクスチャに対しては、ダミーの1x1透明画像を返してエラーを回避する
+    if (urlFileName) {
+      const ext = urlFileName.split('.').pop()?.toLowerCase();
+      const textureExts = ['png', 'jpg', 'jpeg', 'bmp', 'tga', 'spa', 'sph', 'gif', 'dds'];
+      if (textureExts.includes(ext)) {
+        const dummy = getDummyBlobUrl();
+        if (dummy) return dummy;
       }
     }
+
     return null;
   }
 
@@ -211,6 +300,43 @@ export class MmdManager {
     // 物理パラメータの自動最適化 (揺れもの、除外フィルター等)
     this._optimizeModelPhysicsMetadata(mesh);
 
+    // つま先IKの変形階層不整合を自動修正
+    if (mesh.metadata && mesh.metadata.bones) {
+      const bonesMetadata = mesh.metadata.bones;
+      const leftLegIk = bonesMetadata.find(b => b.name === "左足ＩＫ");
+      const rightLegIk = bonesMetadata.find(b => b.name === "右足ＩＫ");
+      const leftToeIk = bonesMetadata.find(b => b.name === "左つま先ＩＫ");
+      const rightToeIk = bonesMetadata.find(b => b.name === "右つま先ＩＫ");
+
+      if (leftLegIk && leftToeIk && leftToeIk.transformOrder <= leftLegIk.transformOrder) {
+        console.log(`%c[MMD Fix] Correcting transformOrder for 左つま先ＩＫ (from ${leftToeIk.transformOrder} to ${leftLegIk.transformOrder + 1})`, "color: #FF9800; font-weight: bold;");
+        leftToeIk.transformOrder = leftLegIk.transformOrder + 1;
+      }
+      if (rightLegIk && rightToeIk && rightToeIk.transformOrder <= rightLegIk.transformOrder) {
+        console.log(`%c[MMD Fix] Correcting transformOrder for 右つま先ＩＫ (from ${rightToeIk.transformOrder} to ${rightLegIk.transformOrder + 1})`, "color: #FF9800; font-weight: bold;");
+        rightToeIk.transformOrder = rightLegIk.transformOrder + 1;
+      }
+    }
+
+    // createMmdModel の前に体幹剛体の physicsMode (物理演算モード) をメタデータ上で FollowBone (0) に書き換え
+    if (mesh.metadata && mesh.metadata.rigidBodies && mesh.metadata.bones) {
+      const rigidBodiesMetadata = mesh.metadata.rigidBodies;
+      const bonesMetadata = mesh.metadata.bones;
+      const bodyBaseKeywords = ["センター", "グルーブ", "腰", "骨盤", "下半身", "上半身", "首", "頭", "親", "体", "center", "groove", "waist", "pelvis", "lower body", "upper body", "neck", "head", "root", "spine", "hip", "torso", "body"];
+
+      rigidBodiesMetadata.forEach(rb => {
+        const bone = bonesMetadata[rb.boneIndex];
+        const boneName = bone ? (bone.name || "") : "";
+        const targetName = ((rb.name || "") + "_" + boneName).toLowerCase();
+        const isBodyBase = bodyBaseKeywords.some(kw => targetName.includes(kw));
+
+        if (isBodyBase) {
+          rb.physicsMode = 0; // FollowBone
+          if (rb.type !== undefined) rb.type = 0;
+        }
+      });
+    }
+
     // MmdRuntimeにモデルを登録 (物理初期化バグを防ぐため、一度無効化したのちレストポーズで初期化)
     const mmdModel = this.mmdRuntime.createMmdModel(mesh);
     mmdModel.physicsEnabled = false;
@@ -220,7 +346,8 @@ export class MmdManager {
     mesh.computeWorldMatrix(true);
     mmdModel.initializePhysics();
     this._optimizeBreastPhysicsDirectly(mmdModel, mesh);
-    mmdModel.physicsEnabled = true;
+    this._optimizeBodyBasePhysicsDirectly(mmdModel, mesh);
+    mmdModel.physicsEnabled = !this.physicsDisableGlobally;
 
     const id = "model_" + (this._modelIdCounter++);
     this.deployedModels.set(id, {
@@ -234,6 +361,97 @@ export class MmdManager {
       audio: null
     });
     this.activeModelId = id;
+
+    // モデル読み込み時のボーン＆IK詳細ログの出力
+    console.log(`%c[MMD Model Loaded] ${pmxFileName} (ID: ${id})`, "color: #4CAF50; font-weight: bold; font-size: 1.2em;");
+    const bonesSource = mmdModel.runtimeBones || (mesh.skeleton ? mesh.skeleton.bones : null);
+    if (bonesSource) {
+      console.log(` - Total Bones: ${bonesSource.length}`);
+      
+      // 最初のボーンのプロパティ構成を出力してデバッグしやすくする
+      if (bonesSource.length > 0) {
+        const sampleBone = bonesSource[0];
+        console.log("Sample Bone Keys:", Object.keys(sampleBone));
+        if (sampleBone.babylonBone) {
+          console.log("Sample Babylon Bone Keys:", Object.keys(sampleBone.babylonBone));
+        }
+      }
+
+      const targetBoneNames = [
+        "すべての親", "全ての親", 
+        "センター", "グルーブ", "腰", 
+        "下半身", "上半身", "上半身2",
+        "左足", "右足", "左ひざ", "右ひざ", "左足首", "右足首",
+        "左足ＩＫ", "右足ＩＫ", "左つま先ＩＫ", "右つま先ＩＫ"
+      ];
+      console.group(`Bone Structure Detail for ${pmxFileName}`);
+      targetBoneNames.forEach(boneName => {
+        const bone = bonesSource.find(b => b.name === boneName);
+        if (bone) {
+          // 親・祖父ボーン等を遡るヘルパー
+          const getParentChain = (b) => {
+            const chain = [];
+            let current = b;
+            for (let i = 0; i < 3; i++) {
+              const p = current.parentBone || current.parent || (typeof current.getParent === "function" ? current.getParent() : null) || current.linkedBone;
+              if (p && p !== current) {
+                chain.push(p.name || "Unnamed");
+                current = p;
+              } else {
+                break;
+              }
+            }
+            return chain.length > 0 ? chain.join(" -> ") : "None";
+          };
+
+          const parentChain = getParentChain(bone);
+          let localPos = "N/A";
+          
+          if (bone.babylonBone && bone.babylonBone.position) {
+            localPos = bone.babylonBone.position.toString();
+          } else if (bone.position) {
+            localPos = bone.position.toString();
+          }
+          
+          const idx = bonesSource.indexOf(bone);
+          const flag = bone.flag !== undefined ? bone.flag : "N/A";
+          const isMovable = (typeof flag === "number") ? ((flag & 0x0004) !== 0) : "N/A";
+          const order = bone.transformOrder !== undefined ? bone.transformOrder : "N/A";
+          const afterPhys = bone.transformAfterPhysics !== undefined ? bone.transformAfterPhysics : "N/A";
+          
+          console.log(`Bone [${boneName}]: Index = ${idx}, Parent Chain = ${parentChain}, flag = ${flag} (Movable: ${isMovable}), transformOrder = ${order}, transformAfterPhysics = ${afterPhys}, Local Pos = ${localPos}`);
+        } else {
+          console.log(`Bone [${boneName}]: %cNOT FOUND`, "color: #FF5722;");
+        }
+      });
+      console.groupEnd();
+    }
+
+    if (mmdModel) {
+      console.group(`IK Solver Settings for ${pmxFileName}`);
+      // mmdModel.runtimeBones または内部構造から IK 情報を抽出
+      if (mmdModel.runtimeBones) {
+        let ikCount = 0;
+        mmdModel.runtimeBones.forEach(rb => {
+          if (rb.ikSolver) {
+            ikCount++;
+            const solver = rb.ikSolver;
+            console.log(`IK Bone: [${rb.name}] -> Target: [${solver.targetBone ? solver.targetBone.name : "Unknown"}], Iterations: ${solver.iteration}, LimitAngle: ${solver.limitAngle}`);
+            if (solver.links) {
+              const linkNames = solver.links.map(l => l.bone ? l.bone.name : "Unknown");
+              console.log(`   Links: ${linkNames.join(" -> ")}`);
+            }
+          }
+        });
+        if (ikCount === 0) {
+          console.log("No IK Solvers found in runtime bones.");
+        }
+      } else {
+        console.log("runtimeBones properties not found on mmdModel.");
+      }
+      console.log("Raw mmdModel object:", mmdModel);
+      console.groupEnd();
+    }
 
     return { id, mesh, mmdModel };
   }
@@ -272,7 +490,8 @@ export class MmdManager {
 
     model.mmdModel.initializePhysics();
     this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
-    model.mmdModel.physicsEnabled = true;
+    this._optimizeBodyBasePhysicsDirectly(model.mmdModel, model.mesh);
+    model.mmdModel.physicsEnabled = !this.physicsDisableGlobally;
 
     const vmdBlobUrl = this.resolvePath(vmdFileName);
     if (!vmdBlobUrl) {
@@ -323,6 +542,44 @@ export class MmdManager {
         model.audio.play().catch(e => console.warn(e));
       }
     }
+
+    // モーション読み込み時のログ出力
+    console.log(`%c[MMD Motion Loaded] ${vmdFileName} for Model: ${model.name}`, "color: #2196F3; font-weight: bold; font-size: 1.2em;");
+    if (animation) {
+      console.log("Raw Motion Object:", animation);
+      
+      const tracks = [];
+      if (animation.boneTracks) tracks.push(...animation.boneTracks);
+      if (animation.movableBoneTracks) tracks.push(...animation.movableBoneTracks);
+      
+      console.log(` - Motion Bone Tracks Count: ${tracks.length}`);
+      const trackNames = tracks.map(b => b.name);
+      console.log(" - Tracks list:", trackNames);
+
+      // 主要なボーンアニメーションがモデルに存在するかチェック
+      console.group(`Motion Bone Mapping Check for ${model.name}`);
+      const importantMotionBones = ["すべての親", "全ての親", "センター", "グルーブ", "腰", "下半身", "左足ＩＫ", "右足ＩＫ"];
+      
+      const modelBones = model.mmdModel.runtimeBones || (model.mesh.skeleton ? model.mesh.skeleton.bones : []);
+      
+      importantMotionBones.forEach(boneName => {
+        const hasTrack = trackNames.includes(boneName);
+        const hasBone = modelBones.some(b => b.name === boneName);
+        if (hasTrack) {
+          if (hasBone) {
+            console.log(`Track [${boneName}]: %cMapped successfully to model bone`, "color: #4CAF50;");
+          } else {
+            console.log(`Track [${boneName}]: %cMISSING in model (Motion exists but model doesn't have this bone)`, "color: #F44336; font-weight: bold;");
+          }
+        } else {
+          console.log(`Track [${boneName}]: %cNot in VMD Motion`, "color: #9E9E9E;");
+        }
+      });
+      console.groupEnd();
+    }
+
+    // _currentAnimation の内部バインドマップをダンプ
+    this._dumpBindMaps(model, vmdFileName);
   }
 
   async loadCameraMotion(vmdFileName) {
@@ -401,7 +658,8 @@ export class MmdManager {
           model.mmdModel.mesh.computeWorldMatrix(true);
           model.mmdModel.initializePhysics();
           this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
-          model.mmdModel.physicsEnabled = true;
+          this._optimizeBodyBasePhysicsDirectly(model.mmdModel, model.mesh);
+          model.mmdModel.physicsEnabled = !this.physicsDisableGlobally;
         }
       }
     }
@@ -527,6 +785,9 @@ export class MmdManager {
     // 除外する不要な物理剛体のキーワード
     const ignoreKeywords = ["下着", "パンツ", "インナー", "アンダーウェア", "pants", "underwear", "inner"];
 
+    // 体幹・基幹ボーンのキーワード
+    const bodyBaseKeywords = ["センター", "グルーブ", "腰", "骨盤", "下半身", "上半身", "首", "頭", "親", "体", "center", "groove", "waist", "pelvis", "lower body", "upper body", "neck", "head", "root", "spine", "hip", "torso", "body"];
+
     // 揺れもののキーワード
     const hairKeywords = ["髪", "ヘア", "hair", "ツインテ", "ポニテ", "前髪", "横髪", "後髪", "アホ毛", "サイド", "バック", "テール"];
     const breastKeywords = ["胸", "おっぱい", "乳", "bust", "breast", "ちち"];
@@ -546,6 +807,13 @@ export class MmdManager {
       if (shouldIgnore) {
         rb.physicsMode = 0; // FollowBone
         rb.collisionMask = 0; // 他のものと衝突させない
+        continue;
+      }
+
+      // 体幹・基幹ボーンの剛体は物理演算で動かさず、必ずアニメーションに追従させる (FollowBone)
+      const isBodyBase = bodyBaseKeywords.some(kw => targetName.includes(kw));
+      if (isBodyBase) {
+        rb.physicsMode = 0; // FollowBone
         continue;
       }
 
@@ -729,12 +997,93 @@ export class MmdManager {
     console.log(`[Physics Optimization] Breast settings updated. Enabled: ${enabled}, Stiffness: ${stiffness}, Optimized: ${optimizedCount} bodies.`);
   }
 
+  // 体幹剛体の物理を直接最適化（物理演算による上書きを完全に防ぐ）
+  _optimizeBodyBasePhysicsDirectly(mmdModel, mesh) {
+    if (!mmdModel || !mmdModel._physicsModel || !mmdModel._physicsModel._bodies) {
+      return;
+    }
+    const physicsModel = mmdModel._physicsModel;
+    const bodies = physicsModel._bodies;
+    const nodes = physicsModel._nodes;
+    if (!bodies || !nodes) return;
+
+    const rigidBodies = mesh.metadata?.rigidBodies || [];
+    const bodyBaseKeywords = ["センター", "グルーブ", "腰", "骨盤", "下半身", "上半身", "首", "頭", "親", "体", "center", "groove", "waist", "pelvis", "lower body", "upper body", "neck", "head", "root", "spine", "hip", "torso", "body"];
+    
+    // skeletonがnullのモデルに対応するため、runtimeBonesを優先して参照する
+    const bones = mmdModel.runtimeBones || (mesh.skeleton ? mesh.skeleton.bones : []);
+    let optimizedCount = 0;
+
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (!node) continue;
+
+      const nodeName = node.name || "";
+      const rb = rigidBodies[i];
+      const rbName = rb ? (rb.name || "") : "";
+      
+      const bone = rb ? (bones[rb.boneIndex] || bones.find(b => bones.indexOf(b) === rb.boneIndex)) : null;
+      const boneName = bone ? (bone.name || "") : "";
+
+      const targetName = (nodeName + "_" + rbName + "_" + boneName).toLowerCase();
+      const isBodyBase = bodyBaseKeywords.some(kw => targetName.includes(kw));
+
+      if (isBodyBase) {
+        node.physicsMode = 0; // FollowBone
+        const body = bodies[i];
+        if (body) {
+          if (typeof body.disableSimulation === "function") {
+            body.disableSimulation();
+          }
+          if (body.shape) {
+            body.shape.filterMembershipMask = 0;
+            body.shape.filterCollideMask = 0;
+          }
+          if (typeof body.setGravityFactor === "function") {
+            body.setGravityFactor(0.0);
+          } else {
+            body.gravityFactor = 0.0;
+          }
+        }
+        optimizedCount++;
+      }
+    }
+    console.log(`[Physics Optimization] Body base settings updated. Optimized: ${optimizedCount} bodies.`);
+  }
+
   updateBreastPhysicsSettings(enabled, stiffness) {
     this.breastPhysicsEnabled = enabled;
     this.breastPhysicsStiffness = stiffness;
 
     for (const model of this.deployedModels.values()) {
       this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
+    }
+  }
+
+  setPhysicsDisableGlobally(disabled) {
+    this.physicsDisableGlobally = disabled;
+    if (this.mmdPhysics) {
+      this.mmdPhysics.enabled = !disabled;
+    }
+    if (this.mmdRuntime) {
+      this.mmdRuntime.physicsEnabled = !disabled;
+    }
+    
+    if (this.scene && typeof this.scene.getPhysicsEngine === "function") {
+      const physicsEngine = this.scene.getPhysicsEngine();
+      if (physicsEngine) {
+        if (disabled) {
+          physicsEngine.setTimeStep(0);
+        } else {
+          physicsEngine.setTimeStep(1 / 60);
+        }
+      }
+    }
+    
+    for (const model of this.deployedModels.values()) {
+      if (model.mmdModel) {
+        model.mmdModel.physicsEnabled = !disabled;
+      }
     }
   }
 
@@ -758,5 +1107,296 @@ export class MmdManager {
 
     model.mmdModel.morph.setMorphWeight(morphName, value);
   }
-}
 
+  dumpCurrentPoseAndMotion() {
+    const runtimeTime = this.mmdRuntime.currentTime;
+    const isPlaying = this.mmdRuntime.isAnimationPlaying;
+    const frameIndex = runtimeTime * 30; // 30fps VMD frame
+    
+    console.log(`%c=== MMD Realtime Debug (Time: ${runtimeTime.toFixed(4)}s, Frame: ${frameIndex.toFixed(2)}, Playing: ${isPlaying}) ===`, "color: #FF5722; font-weight: bold; font-size: 1.1em;");
+
+    console.log("=== MmdRuntime Raw Object ===", this.mmdRuntime);
+    console.log("=== MmdPhysics Raw Object ===", this.mmdPhysics);
+
+    for (const [id, model] of this.deployedModels.entries()) {
+      console.group(`Model: ${model.name} (ID: ${id})`);
+      console.log("Mesh Position:", model.mesh.position.toString());
+      console.log("=== MmdModel Raw Object ===", model.mmdModel);
+
+      // _currentAnimation のバインドマップダンプ
+      this._dumpBindMaps(model, null);
+
+      let animDetails = "";
+      try {
+        if (model.mmdModel._runtimeBones) {
+          animDetails += `_runtimeBones: ${model.mmdModel._runtimeBones.length}, `;
+        }
+        const keys = Object.getOwnPropertyNames(model.mmdModel);
+        keys.forEach(k => {
+          if (k.toLowerCase().includes("anim") || k.toLowerCase().includes("track") || k.toLowerCase().includes("state")) {
+            const val = model.mmdModel[k];
+            if (val) {
+              if (Array.isArray(val)) {
+                animDetails += `${k}: [Array(${val.length})], `;
+              } else if (typeof val === "object") {
+                animDetails += `${k}: {Object keys: ${Object.keys(val).join(",")}}, `;
+              } else {
+                animDetails += `${k}: ${val}, `;
+              }
+            }
+          }
+        });
+      } catch (e) {
+        animDetails += `Error scanning: ${e.message}`;
+      }
+      console.log("   MmdModel Anim Details:", animDetails);
+
+      const bonesSource = model.mmdModel.runtimeBones;
+      if (!bonesSource) {
+        console.log("No runtime bones found.");
+        console.groupEnd();
+        continue;
+      }
+
+      // 主要ボーンのダンプ
+      const targetBoneNames = ["全ての親", "すべての親", "センター", "グルーブ", "腰", "下半身", "左足ＩＫ", "右足ＩＫ"];
+      
+      targetBoneNames.forEach(boneName => {
+        const bone = bonesSource.find(b => b.name === boneName);
+        if (!bone) return;
+
+        let worldPos = new Vector3();
+        let localPos = new Vector3();
+        
+        if (bone.worldMatrix) {
+          if (bone.worldMatrix.m) {
+            worldPos = Vector3.TransformCoordinates(Vector3.Zero(), bone.worldMatrix);
+          } else if (bone.worldMatrix.length === 16) {
+            worldPos.set(bone.worldMatrix[12], bone.worldMatrix[13], bone.worldMatrix[14]);
+          }
+        } else if (bone.babylonBone) {
+          const wm = bone.babylonBone.getWorldMatrix();
+          worldPos = Vector3.TransformCoordinates(Vector3.Zero(), wm);
+        }
+
+        if (typeof bone.getAnimationPositionOffsetToRef === "function") {
+          bone.getAnimationPositionOffsetToRef(localPos);
+        } else if (bone.babylonBone) {
+          localPos = bone.babylonBone.position.clone();
+        }
+
+        console.log(`%c[Bone: ${boneName}]`, "font-weight: bold; color: #673AB7;");
+        console.log("   Constructor:", bone.constructor.name);
+        console.log("   Raw Object:", bone);
+
+        let details = "";
+        try {
+          const proto = Object.getPrototypeOf(bone);
+          const allKeys = Array.from(new Set([...Object.getOwnPropertyNames(bone), ...Object.getOwnPropertyNames(proto)]));
+          allKeys.forEach(k => {
+            if (k.startsWith("_") || k.toLowerCase().includes("movable") || k.toLowerCase().includes("physics") || k.toLowerCase().includes("flag")) {
+              try {
+                details += `${k}: ${bone[k]}, `;
+              } catch(e) {}
+            }
+          });
+        } catch (err) {}
+        console.log(`   Internal Flag Details: ${details}`);
+
+        console.log(` - Live Local Pos (animOffset): ${localPos.toString()}`);
+        console.log(` - Live World Pos: ${worldPos.toString()}`);
+        // linkedBone.position と restMatrix.translation の生ダンプ（センター系ボーンのみ詳細）
+        const isCenterBone = ["センター", "グルーブ", "腰"].includes(boneName);
+        if (isCenterBone && bone.linkedBone) {
+          const rawPos = bone.linkedBone.position;
+          const restVec = new Vector3();
+          if (typeof bone.linkedBone.getRestMatrix === "function") {
+            bone.linkedBone.getRestMatrix().getTranslationToRef(restVec);
+          }
+          console.log(`%c   [Raw] linkedBone.position = {X:${rawPos.x.toFixed(6)} Y:${rawPos.y.toFixed(6)} Z:${rawPos.z.toFixed(6)}}`, "color: #FF9800;");
+          console.log(`%c   [Raw] restMatrix.translation = {X:${restVec.x.toFixed(6)} Y:${restVec.y.toFixed(6)} Z:${restVec.z.toFixed(6)}}`, "color: #FF9800;");
+          console.log(`%c   [Raw] diff (should == animOffset) = {X:${(rawPos.x-restVec.x).toFixed(6)} Y:${(rawPos.y-restVec.y).toFixed(6)} Z:${(rawPos.z-restVec.z).toFixed(6)}}`, "color: #FF9800;");
+          
+          if (bone.linkedBone._linkedTransformNode) {
+            const ltn = bone.linkedBone._linkedTransformNode;
+            console.log(`%c   [LinkedTransformNode] name: "${ltn.name}", pos: {X:${ltn.position.x.toFixed(6)} Y:${ltn.position.y.toFixed(6)} Z:${ltn.position.z.toFixed(6)}}`, "color: #03A9F4; font-weight: bold;");
+          } else {
+            console.log(`   [LinkedTransformNode] None`);
+          }
+
+          if (bone.appendTransformSolver) {
+            const ats = bone.appendTransformSolver;
+            console.log(`%c   [AppendTransform] target: "${ats.targetBone ? ats.targetBone.name : 'null'}", affectAlign: ${ats.affectAlign}, ratio: ${ats.ratio}, isPosition: ${ats.isPosition}, isRotation: ${ats.isRotation}`, "color: #E91E63; font-weight: bold;");
+          } else {
+            console.log(`   [AppendTransform] None`);
+          }
+          if (bone.ikSolver) {
+            console.log(`%c   [IKSolver] target: "${bone.ikSolver.targetBone ? bone.ikSolver.targetBone.name : 'null'}", iteration: ${bone.ikSolver.iteration}`, "color: #E91E63; font-weight: bold;");
+          }
+        }
+
+        // モーションの対応キーフレーム探索（movableBoneTracks と boneTracks を分けて表示）
+        for (const [motionName, anim] of model.motions.entries()) {
+          const findClosestKeyframe = (track) => {
+            if (!track || !track.frameNumbers || track.frameNumbers.length === 0) return null;
+            let closestIdx = 0;
+            let minDiff = Infinity;
+            for (let i = 0; i < track.frameNumbers.length; i++) {
+              const diff = Math.abs(track.frameNumbers[i] - frameIndex);
+              if (diff < minDiff) { minDiff = diff; closestIdx = i; }
+            }
+            const closestFrame = track.frameNumbers[closestIdx];
+            let keyInfo = `Frame ${closestFrame} (Diff: ${(frameIndex - closestFrame).toFixed(2)})`;
+            if (track.positions && track.positions.length > 0) {
+              const px = track.positions[closestIdx * 3];
+              const py = track.positions[closestIdx * 3 + 1];
+              const pz = track.positions[closestIdx * 3 + 2];
+              if (px !== undefined) keyInfo += `, Pos=[${px.toFixed(4)}, ${py.toFixed(4)}, ${pz.toFixed(4)}]`;
+            }
+            if (track.rotations && track.rotations.length > 0) {
+              const rx = track.rotations[closestIdx * 4];
+              const ry = track.rotations[closestIdx * 4 + 1];
+              const rz = track.rotations[closestIdx * 4 + 2];
+              const rw = track.rotations[closestIdx * 4 + 3];
+              if (rx !== undefined) keyInfo += `, Rot=[${rx.toFixed(4)}, ${ry.toFixed(4)}, ${rz.toFixed(4)}, ${rw.toFixed(4)}]`;
+            }
+            return keyInfo;
+          };
+
+          // ① movableBoneTracks（位置＋回転トラック）を検索
+          const movableTrack = (anim.movableBoneTracks || []).find(t => t.name === boneName);
+          if (movableTrack) {
+            const frameCount = movableTrack.frameNumbers?.length ?? 0;
+            if (frameCount === 0) {
+              console.log(`%c - [MovableTrack] "${boneName}" in "${motionName}" frameNumbers.length: 0 → position が常に restMatrix にリセットされる！`, "color: #F44336; font-weight: bold;");
+            } else {
+              const kf = findClosestKeyframe(movableTrack);
+              console.log(`%c - [MovableTrack] "${boneName}" frameNumbers.length: ${frameCount}`, "color: #4CAF50;");
+              if (kf) console.log(`   Closest Keyframe: ${kf}`);
+            }
+          } else {
+            console.log(`%c - [MovableTrack] "${boneName}" → NOT FOUND in movableBoneTracks`, "color: #FF9800;");
+          }
+
+          // ② boneTracks（回転のみトラック）を検索
+          const boneTrack = (anim.boneTracks || []).find(t => t.name === boneName);
+          if (boneTrack) {
+            const frameCount = boneTrack.frameNumbers?.length ?? 0;
+            const kf = findClosestKeyframe(boneTrack);
+            console.log(` - [BoneTrack] "${boneName}" frameNumbers.length: ${frameCount}`);
+            if (kf) console.log(`   Closest Keyframe: ${kf}`);
+          }
+        }
+      });
+      console.groupEnd();
+    }
+  }
+
+  // _currentAnimation のバインドマップをダンプするヘルパー
+  _dumpBindMaps(model, contextLabel) {
+    const runtimeAnim = model.mmdModel._currentAnimation;
+    if (!runtimeAnim) {
+      console.log(`%c[Bind Map Dump] No _currentAnimation for ${model.name}`, "color: #FF9800;");
+      return;
+    }
+
+    const label = contextLabel || "Realtime Dump";
+    console.group(`%c[Bind Map Dump] ${label} - ${model.name}`, "color: #00BCD4; font-weight: bold;");
+
+    // movableBoneBindIndexMap のダンプ
+    const movableMap = runtimeAnim.movableBoneBindIndexMap;
+    const movableTracks = runtimeAnim.animation?.movableBoneTracks || [];
+    console.log(`movableBoneBindIndexMap length: ${movableMap?.length}, movableBoneTracks count: ${movableTracks.length}`);
+
+    const skeletonBones = model.mmdModel.skeleton?.bones || [];
+    if (movableMap) {
+      for (let i = 0; i < movableMap.length; i++) {
+        const bone = movableMap[i];
+        const trackName = movableTracks[i]?.name || `Track[${i}]`;
+        if (bone === null || bone === undefined) {
+          console.log(`%c  [${i}] Track "${trackName}" -> UNBOUND (null)`, "color: #F44336; font-weight: bold;");
+        } else {
+          const skelBone = skeletonBones.find(b => b.name === bone.name);
+          const isSame = skelBone === bone;
+          console.log(`  [${i}] Track "${trackName}" -> Bone "${bone.name}" (constructor: ${bone.constructor.name}), SameInstanceAsSkel: ${isSame}`);
+          if (!isSame && skelBone) {
+            console.log(`%c    WARNING: Bone instance mismatch for Track "${trackName}"! Bound: ${bone._index}, Skel: ${skeletonBones.indexOf(skelBone)}`, "color: #FF5722; font-weight: bold;");
+          }
+        }
+      }
+    }
+
+    // boneBindIndexMap のダンプ（回転のみボーン）
+    const boneMap = runtimeAnim.boneBindIndexMap;
+    const boneTracks = runtimeAnim.animation?.boneTracks || [];
+    console.log(`boneBindIndexMap length: ${boneMap?.length}, boneTracks count: ${boneTracks.length}`);
+    if (boneMap) {
+      const targetCheckNames = ["センター", "グルーブ", "腰", "全ての親", "すべての親"];
+      for (let i = 0; i < boneMap.length; i++) {
+        const bone = boneMap[i];
+        const trackName = boneTracks[i]?.name || `Track[${i}]`;
+        if (targetCheckNames.includes(trackName)) {
+          if (bone === null || bone === undefined) {
+            console.log(`  [BoneTrack: ${trackName}] -> UNBOUND (null)`);
+          } else {
+            const skelBone = skeletonBones.find(b => b.name === bone.name);
+            const isSame = skelBone === bone;
+            console.log(`  [BoneTrack: ${trackName}] -> Bone "${bone.name}" (constructor: ${bone.constructor.name}), SameInstanceAsSkel: ${isSame}`);
+            if (!isSame && skelBone) {
+              console.log(`%c    WARNING: Bone instance mismatch for BoneTrack "${trackName}"! Bound: ${bone._index}, Skel: ${skeletonBones.indexOf(skelBone)}`, "color: #FF5722; font-weight: bold;");
+            }
+          }
+        }
+      }
+    }
+
+    // 体幹ボーンのバインド状態を重点チェック
+    const centerTrackNames = ["センター", "グルーブ", "腰", "全ての親", "すべての親"];
+    centerTrackNames.forEach(name => {
+      // movableBoneTracksで検索
+      const mIdx = movableTracks.findIndex(t => t.name === name);
+      if (mIdx !== -1) {
+        const bound = movableMap?.[mIdx];
+        console.log(`%c  [重要] "${name}" in movableBoneTracks[${mIdx}] -> ${bound ? `Bound to "${bound.name}" (${bound.constructor.name})` : "UNBOUND (null)"}`,
+          bound ? "color: #4CAF50; font-weight: bold;" : "color: #F44336; font-weight: bold;");
+      }
+      // boneTracksで検索
+      const bIdx = boneTracks.findIndex(t => t.name === name);
+      if (bIdx !== -1) {
+        const bound = boneMap?.[bIdx];
+        console.log(`%c  [重要] "${name}" in boneTracks[${bIdx}] -> ${bound ? `Bound to "${bound.name}" (${bound.constructor.name})` : "UNBOUND (null)"}`,
+          bound ? "color: #4CAF50; font-weight: bold;" : "color: #F44336; font-weight: bold;");
+      }
+      if (mIdx === -1 && bIdx === -1) {
+        console.log(`%c  [重要] "${name}" -> Not in any tracks`, "color: #9E9E9E;");
+      }
+    });
+
+    // skeleton.bones vs runtimeBones の一致性チェック（センターのみ）
+    const runtimeBones = model.mmdModel.runtimeBones || [];
+    console.group("skeleton.bones vs runtimeBones 比較 (体幹ボーン)");
+    centerTrackNames.forEach(name => {
+      const skelBone = skeletonBones.find(b => b.name === name);
+      const rtBone = runtimeBones.find(b => b.name === name);
+      const skelIdx = skelBone ? skeletonBones.indexOf(skelBone) : -1;
+      const rtIdx = rtBone ? runtimeBones.indexOf(rtBone) : -1;
+
+      if (skelBone && rtBone) {
+        // バインドされたBoneオブジェクトがruntimeBoneのlinkedBone等と同一か確認
+        const isSameInstance = (skelBone === rtBone) || (rtBone.linkedBone === skelBone) || (rtBone.babylonBone === skelBone);
+        console.log(`"${name}": skeleton[${skelIdx}] = "${skelBone.name}" (${skelBone.constructor.name}), runtime[${rtIdx}] = "${rtBone.name}" (${rtBone.constructor.name}), SameInstance: ${isSameInstance}`);
+        if (!isSameInstance) {
+          console.log(`  -> skelBone object:`, skelBone);
+          console.log(`  -> rtBone object:`, rtBone);
+          if (rtBone.linkedBone) console.log(`  -> rtBone.linkedBone:`, rtBone.linkedBone);
+          if (rtBone.babylonBone) console.log(`  -> rtBone.babylonBone:`, rtBone.babylonBone);
+        }
+      } else {
+        console.log(`%c"${name}": skeleton[${skelIdx}]=${skelBone ? "found" : "NOT FOUND"}, runtime[${rtIdx}]=${rtBone ? "found" : "NOT FOUND"}`, "color: #FF9800;");
+      }
+    });
+    console.groupEnd();
+
+    console.groupEnd();
+  }
+}
