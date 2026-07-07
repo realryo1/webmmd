@@ -99,6 +99,13 @@ export class UIManager {
       this.autoPlayOnMotionToggle.checked = localStorage.getItem("auto-play-on-motion") === "true";
     }
 
+    this.motionLoopToggle = document.querySelector(".motion-loop-toggle");
+    if (this.motionLoopToggle) {
+      const isLoop = localStorage.getItem("motion-loop-enabled") === "true";
+      this.motionLoopToggle.checked = isLoop;
+      this.mmdManager.setLoopEnabled(isLoop);
+    }
+
     this.resourceMonitorToggle = document.querySelector(".resource-monitor-toggle");
     this.resourceMonitorOverlay = document.getElementById("resource-monitor-overlay");
     this.monitorFps = document.getElementById("monitor-fps");
@@ -426,6 +433,13 @@ export class UIManager {
     // モーション自動再生
     this.autoPlayOnMotionToggle?.addEventListener("change", () => {
       localStorage.setItem("auto-play-on-motion", this.autoPlayOnMotionToggle.checked);
+    });
+
+    // モーションループ再生
+    this.motionLoopToggle?.addEventListener("change", () => {
+      const isChecked = this.motionLoopToggle.checked;
+      localStorage.setItem("motion-loop-enabled", isChecked ? "true" : "false");
+      this.mmdManager.setLoopEnabled(isChecked);
     });
 
     // フルスクリーン切り替え

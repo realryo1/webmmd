@@ -39,6 +39,7 @@ export class MmdManager {
   breastPhysicsEnabled = true;
   breastPhysicsStiffness = 1.0;
   physicsDisableGlobally = false;
+  loopEnabled = false;
   
   constructor(scene, camera, physicsPlugin) {
     this.scene = scene;
@@ -56,6 +57,17 @@ export class MmdManager {
     this.scene.onBeforeRenderObservable.add(() => {
       const runtimeTime = this.mmdRuntime.currentTime;
       const isPlaying = this.mmdRuntime.isAnimationPlaying;
+
+      // モーションループ再生の処理
+      if (this.loopEnabled && !isPlaying) {
+        const duration = this.mmdRuntime.animationFrameTimeDuration;
+        const currentFrame = this.mmdRuntime.currentFrameTime;
+        if (duration > 0 && currentFrame >= duration) {
+          this.reset();
+          this.play();
+          return;
+        }
+      }
 
       for (const model of this.deployedModels.values()) {
         if (model.audio) {
@@ -752,6 +764,10 @@ export class MmdManager {
     this.deployedModels.clear();
     this.activeModelId = null;
     this.removeCameraMotion();
+  }
+
+  setLoopEnabled(enabled) {
+    this.loopEnabled = enabled;
   }
 
   clear() {
