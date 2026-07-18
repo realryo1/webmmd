@@ -29,7 +29,7 @@ export class MmdManager {
   mmdPhysics = null;
   
   mmdRuntime = null;
-  deployedModels = new Map(); // id -> { id, mesh, mmdModel, name, motions: Map, shadowEnabled: bool, audio: Audio }
+  deployedModels = new Map(); // id -> { id, mesh, mmdModel, name, motions: Map, shadowEnabled: bool, audio: Audio, userMorphOverrides: Map }
   activeModelId = null;
   _modelIdCounter = 0;
 
@@ -377,7 +377,8 @@ export class MmdManager {
       zipName: zipName,
       motions: new Map(),
       shadowEnabled: true,
-      audio: null
+      audio: null,
+      userMorphOverrides: new Map()
     });
     this.activeModelId = id;
 
@@ -494,6 +495,9 @@ export class MmdManager {
 
     // 再生時間を0にリセット
     this.mmdRuntime.seekAnimation(0);
+
+    // モーション由来のモーフ残存をクリアし、ユーザー手動設定のみ復元
+    this._restoreUserMorphOverrides(model);
 
     // 物理を無効化してスケルトンを初期姿勢に戻し、物理を再構築
     model.mmdModel.physicsEnabled = false;
@@ -1136,6 +1140,32 @@ export class MmdManager {
     if (!model || !model.mmdModel || !model.mmdModel.morph) return;
 
     model.mmdModel.morph.setMorphWeight(morphName, value);
+    if (!model.userMorphOverrides) {
+      model.userMorphOverrides = new Map();
+    }
+    model.userMorphOverrides.set(morphName, value);
+  }
+
+  /**
+   * モーション由来のモーフを全クリアし、ユーザー手動設定値のみ再適用する
+   */
+  _restoreUserMorphOverrides(model) {
+    const morph = model?.mmdModel?.morph;
+    if (!morph) return;
+
+    morph.resetMorphWeights();
+
+    const overrides = model.userMorphOverrides;
+    if (overrides && overrides.size > 0) {
+      for (const [morphName, weight] of overrides.entries()) {
+        morph.setMorphWeight(morphName, weight);
+      }
+    }
+
+    // ウェイト変更をメッシュへ即反映（次フレーム待ちを避ける）
+    if (typeof morph.update === "function") {
+      morph.update();
+    }
   }
 
   dumpCurrentPoseAndMotion() {
