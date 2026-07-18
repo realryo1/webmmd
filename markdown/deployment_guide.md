@@ -82,10 +82,10 @@ npm run dev
 2. 以下のコマンドを実行する。
 
 ```powershell
-tailscale serve https:443 / http://localhost:5173
+tailscale serve --bg http://localhost:5173
 ```
 
-> ローカルの `http://localhost:5173` が、Tailscale の HTTPS ドメインのポート `443`（標準 HTTPS）へ転送されます。
+> ローカルの `http://localhost:5173` が、Tailscale の HTTPS ドメインへバックグラウンドで転送されます。
 
 #### 手順 3：HTTPS リンクでのアクセス
 
