@@ -9,6 +9,10 @@ export class XrManager {
   babylonEngine = null;
   _savedClearColor = null;
   _savedGroundEnabled = true;
+  _savedCameraState = null;
+  _desktopRestorePending = false;
+  _desktopRestoreScheduled = false;
+  _viewerElement = null;
 
   // 自前移動制御用の状態 (マイクラクリエのように加速なし、常に一定量)
   leftStickValues = { x: 0, y: 0 };
@@ -25,6 +29,8 @@ export class XrManager {
 
   async initialize(vrButtonElement) {
     try {
+      this._viewerElement = document.querySelector(".viewer");
+
       // disableDefaultUI: true を指定してデフォルトUIの自動生成を防止
       // disableTeleportation: true を指定してデフォルトのテレポート＆スナップ回転を無効化
       this.xrHelper = await this.scene.createDefaultXRExperienceAsync({
@@ -52,54 +58,61 @@ export class XrManager {
             await this.xrHelper.baseExperience.enterXRAsync(sessionMode, "local-floor");
           }
         });
+      }
 
-        // XRセッションの開始・終了を検知してボタンの状態・テキストを連動させる
-        this.xrHelper.baseExperience.onStateChangedObservable.add((state) => {
-          if (state === WebXRState.IN_XR) {
+      // ボタン有無に関わらず状態監視（スマホのブラウザ終了ボタン含む）
+      this.xrHelper.baseExperience.onStateChangedObservable.add((state) => {
+        if (state === WebXRState.IN_XR) {
+          if (vrButtonElement) {
             vrButtonElement.title = "VRモードを終了";
             vrButtonElement.classList.add("active");
+          }
+          this._viewerElement?.classList.add("xr-active");
 
-            // worldScalingFactor を 12.5 に設定し、ジャイロトラッキングやIPDも含めて等身大化
-            if (this.xrHelper.baseExperience.sessionManager) {
-              this.xrHelper.baseExperience.sessionManager.worldScalingFactor = 12.5;
-            }
+          // 終了時に戻すため、デスクトップ側のカメラ状態を保存
+          this._saveDesktopState();
+          this._desktopRestorePending = true;
 
-            // パススルー設定の自動適用
-            const passthrough = localStorage.getItem("vr-passthrough-enabled") === "true";
-            this.setPassthroughEnabled(passthrough);
-            if (passthrough) {
-              if (!this._savedClearColor) {
-                this._savedClearColor = this.scene.clearColor.clone();
-              }
-              this.scene.clearColor = new Color4(0, 0, 0, 0);
-              if (this.ground) {
-                this._savedGroundEnabled = this.ground.isEnabled();
-                this.ground.setEnabled(false);
-              }
-            }
-          } else if (state === WebXRState.NOT_IN_XR) {
-            vrButtonElement.title = "VRモードを開始";
-            vrButtonElement.classList.remove("active");
+          // worldScalingFactor を 12.5 に設定し、ジャイロトラッキングやIPDも含めて等身大化
+          if (this.xrHelper.baseExperience.sessionManager) {
+            this.xrHelper.baseExperience.sessionManager.worldScalingFactor = 12.5;
+          }
 
-            // worldScalingFactor を 1.0倍に戻す
-            if (this.xrHelper.baseExperience.sessionManager) {
-              this.xrHelper.baseExperience.sessionManager.worldScalingFactor = 1.0;
+          // パススルー設定の自動適用
+          const passthrough = localStorage.getItem("vr-passthrough-enabled") === "true";
+          this.setPassthroughEnabled(passthrough);
+          if (passthrough) {
+            if (!this._savedClearColor) {
+              this._savedClearColor = this.scene.clearColor.clone();
             }
-
-            // 背景色と地面の復元
-            if (this._savedClearColor) {
-              this.scene.clearColor = this._savedClearColor;
-              this._savedClearColor = null;
-            } else if (this.babylonEngine) {
-              const uiColor = document.querySelector(".color-input")?.value || "#0b1118";
-              this.babylonEngine.setBackgroundColor(uiColor);
-            }
+            this.scene.clearColor = new Color4(0, 0, 0, 0);
             if (this.ground) {
-              this.ground.setEnabled(this._savedGroundEnabled);
+              this._savedGroundEnabled = this.ground.isEnabled();
+              this.ground.setEnabled(false);
             }
           }
-        });
-      }
+        } else if (state === WebXRState.NOT_IN_XR) {
+          if (vrButtonElement) {
+            vrButtonElement.title = "VRモードを開始";
+            vrButtonElement.classList.remove("active");
+          }
+          this._viewerElement?.classList.remove("xr-active");
+
+          // worldScalingFactor を 1.0倍に戻す
+          if (this.xrHelper.baseExperience.sessionManager) {
+            this.xrHelper.baseExperience.sessionManager.worldScalingFactor = 1.0;
+          }
+
+          // Babylon の session end 後処理より後ろで復元する
+          this._scheduleDesktopRestore();
+        }
+      });
+
+      // スマホの左上バツ等、ブラウザ主導の session.end でも確実に復元
+      this.xrHelper.baseExperience.sessionManager.onXRSessionEnded.add(() => {
+        this._viewerElement?.classList.remove("xr-active");
+        this._scheduleDesktopRestore();
+      });
 
       // コントローラーが追加されたときのバインディング (L/Rスティックの割り当てを固定)
       this.xrHelper.input.onControllerAddedObservable.add((controller) => {
@@ -121,6 +134,84 @@ export class XrManager {
         vrButtonElement.title = "WebXR はこのブラウザ/デバイスではサポートされていません";
       }
     }
+  }
+
+  _saveDesktopState() {
+    if (this.babylonEngine?.camera) {
+      const cam = this.babylonEngine.camera;
+      this._savedCameraState = {
+        alpha: cam.alpha,
+        beta: cam.beta,
+        radius: cam.radius,
+        target: cam.target.clone()
+      };
+    }
+
+    if (!this._savedClearColor) {
+      this._savedClearColor = this.scene.clearColor.clone();
+    }
+
+    if (this.ground) {
+      this._savedGroundEnabled = this.ground.isEnabled();
+    }
+  }
+
+  _scheduleDesktopRestore() {
+    if (!this._desktopRestorePending && !this._savedCameraState && !this._savedClearColor) {
+      return;
+    }
+    if (this._desktopRestoreScheduled) {
+      return;
+    }
+    this._desktopRestoreScheduled = true;
+
+    // session end ハンドラ内では Babylon が直後に requester を null にするため遅延必須
+    const run = () => this._restoreDesktopState();
+    setTimeout(run, 0);
+    setTimeout(run, 100);
+    setTimeout(run, 400);
+  }
+
+  _restoreDesktopState() {
+    // 不透明背景へ強制復元（パススルー時の透明 clearColor 残りを防ぐ）
+    if (this._savedClearColor) {
+      const c = this._savedClearColor;
+      this.scene.clearColor = new Color4(c.r, c.g, c.b, 1.0);
+      this._savedClearColor = null;
+    } else if (this.babylonEngine) {
+      const uiColor = document.querySelector(".color-input")?.value || "#0b1118";
+      this.babylonEngine.setBackgroundColor(uiColor);
+    } else {
+      this.scene.clearColor = new Color4(0.04, 0.07, 0.09, 1.0);
+    }
+
+    if (this.ground) {
+      this.ground.setEnabled(this._savedGroundEnabled);
+    }
+
+    // Babylon が XR カメラ位置で ArcRotateCamera を上書きするため、保存値で戻す
+    if (this.babylonEngine?.camera && this._savedCameraState) {
+      const cam = this.babylonEngine.camera;
+      const s = this._savedCameraState;
+      cam.alpha = s.alpha;
+      cam.beta = s.beta;
+      cam.radius = s.radius;
+      cam.setTarget(s.target.clone());
+      this._savedCameraState = null;
+    }
+
+    this.leftStickValues = { x: 0, y: 0 };
+    this.rightStickX = 0;
+    this.isMovingUp = false;
+    this.isMovingDown = false;
+
+    if (this.babylonEngine) {
+      this.babylonEngine.restoreAfterXr();
+    }
+
+    this._desktopRestorePending = false;
+    this._desktopRestoreScheduled = false;
+    this._viewerElement?.classList.remove("xr-active");
   }
 
   setupControllerInput(motionController) {

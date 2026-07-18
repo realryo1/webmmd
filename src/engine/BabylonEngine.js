@@ -246,6 +246,51 @@ export class BabylonEngine {
     }
   }
 
+  // WebXR 終了後にデスクトップ描画状態を復元する
+  // スマホのブラウザ終了ボタンでは、Babylon の session end 処理が
+  // オブザーバより後に customAnimationFrameRequester を null にするため、遅延再適用が必要
+  restoreAfterXr() {
+    if (!this.engine || !this.scene) return;
+
+    const canvas = this.engine.getRenderingCanvas();
+    if (this.camera) {
+      this.scene.activeCamera = this.camera;
+      if (canvas) {
+        this.camera.attachControl(canvas, true);
+      }
+    }
+
+    // XR 中に Babylon が canvas バッファをヘッドセット解像度へ変えるため CSS を明示
+    if (canvas) {
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+    }
+
+    this.scene.autoClear = true;
+
+    const syncLayoutAndLoop = () => {
+      if (!this.engine) return;
+      this.updateAnimationFrameRequester();
+      this.engine.resize();
+      // session end 直後にループが止まる端末対策
+      if (typeof this.engine._renderLoop === "function") {
+        this.engine._renderLoop();
+      }
+    };
+
+    syncLayoutAndLoop();
+
+    // 没入モード解除後のレイアウト確定を待つ（スマホは特に遅延が大きい）
+    const delays = [0, 50, 150, 300, 600, 1000];
+    for (const ms of delays) {
+      setTimeout(syncLayoutAndLoop, ms);
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(syncLayoutAndLoop);
+    });
+  }
+
   setBackgroundMode(mode) {
     if (!this.ground) return;
     if (mode === "grid") {
