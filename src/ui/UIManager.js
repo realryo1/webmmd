@@ -88,13 +88,27 @@ export class UIManager {
     this.gravityMagnitudeInput = document.querySelector(".gravity-magnitude-input");
     this.gravityMagnitudeValue = document.querySelector(".gravity-magnitude-value");
     this.breastPhysicsToggle = document.querySelector(".breast-physics-toggle");
-    this.breastPhysicsFpsInput = document.querySelector(".breast-physics-fps-input");
-    this.breastPhysicsFpsValue = document.querySelector(".breast-physics-fps-value");
     this.breastPhysicsInertiaInput = document.querySelector(".breast-physics-inertia-input");
     this.breastPhysicsInertiaValue = document.querySelector(".breast-physics-inertia-value");
     
     this.pixelRatioSelect = document.querySelector(".pixel-ratio-select");
+    if (this.pixelRatioSelect) {
+      const savedRatio = localStorage.getItem("pixel-ratio") || "1";
+      this.pixelRatioSelect.value = savedRatio;
+      if (this.engine) {
+        this.engine.setPixelRatio(parseFloat(savedRatio));
+      }
+    }
+
     this.shadowResolutionSelect = document.querySelector(".shadow-resolution-select");
+    if (this.shadowResolutionSelect) {
+      const savedRes = localStorage.getItem("shadow-resolution") || "1024";
+      this.shadowResolutionSelect.value = savedRes;
+      if (this.engine) {
+        this.engine.setShadowResolution(parseInt(savedRes, 10));
+      }
+    }
+
     this.vrPassthroughInput = document.querySelector(".vr-passthrough-toggle");
     if (this.vrPassthroughInput) {
       const isEnabled = localStorage.getItem("vr-passthrough-enabled") === "true";
@@ -216,7 +230,8 @@ export class UIManager {
 
   setupEvents() {
     // モーダルの開閉イベント登録
-    this.addModelWindowButton?.addEventListener("click", () => {
+    this.addModelWindowButton?.addEventListener("click", async () => {
+      if (!(await this.ensureAssetsAccess())) return;
       this.modelSelectModal?.removeAttribute("hidden");
     });
     this.closeModelModal?.addEventListener("click", () => {
@@ -242,15 +257,11 @@ export class UIManager {
     if (assetsOpenButton) {
       assetsOpenButton.addEventListener("click", async () => {
         if (window.showDirectoryPicker) {
+          // 既存ハンドルがあり未許可の場合は、このクリックから確認ダイアログを出して再接続
           if (this.directoryHandle) {
             const currentPermission = await this.directoryHandle.queryPermission({ mode: "read" });
             if (currentPermission !== "granted") {
-              const opt = { mode: "read" };
-              const permission = await this.directoryHandle.requestPermission(opt);
-              if (permission === "granted") {
-                await this.loadDirectoryHandle(this.directoryHandle);
-                return;
-              }
+              if (await this.ensureAssetsAccess()) return;
             }
           }
           try {
@@ -417,20 +428,8 @@ export class UIManager {
     // 胸の物理演算トグル
     this.breastPhysicsToggle?.addEventListener("change", () => {
       const enabled = this.breastPhysicsToggle.checked;
-      const fps = this.breastPhysicsFpsInput ? parseInt(this.breastPhysicsFpsInput.value, 10) : 60;
       const inertia = this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0;
-      this.mmdManager.updateBreastPhysicsSettings(enabled, fps, inertia);
-    });
-
-    // 胸の判定フレームレート
-    this.breastPhysicsFpsInput?.addEventListener("input", () => {
-      const fps = parseInt(this.breastPhysicsFpsInput.value, 10);
-      if (this.breastPhysicsFpsValue) {
-        this.breastPhysicsFpsValue.textContent = fps;
-      }
-      const enabled = this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true;
-      const inertia = this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0;
-      this.mmdManager.updateBreastPhysicsSettings(enabled, fps, inertia);
+      this.mmdManager.updateBreastPhysicsSettings(enabled, inertia);
     });
 
     // 胸の慣性力倍率
@@ -440,18 +439,21 @@ export class UIManager {
         this.breastPhysicsInertiaValue.textContent = inertia.toFixed(1);
       }
       const enabled = this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true;
-      const fps = this.breastPhysicsFpsInput ? parseInt(this.breastPhysicsFpsInput.value, 10) : 60;
-      this.mmdManager.updateBreastPhysicsSettings(enabled, fps, inertia);
+      this.mmdManager.updateBreastPhysicsSettings(enabled, inertia);
     });
 
     // 画質上限
     this.pixelRatioSelect?.addEventListener("change", () => {
-      this.engine.setPixelRatio(parseFloat(this.pixelRatioSelect.value));
+      const ratio = this.pixelRatioSelect.value;
+      localStorage.setItem("pixel-ratio", ratio);
+      this.engine.setPixelRatio(parseFloat(ratio));
     });
 
     // シャドウ解像度
     this.shadowResolutionSelect?.addEventListener("change", () => {
-      this.engine.setShadowResolution(parseInt(this.shadowResolutionSelect.value));
+      const size = this.shadowResolutionSelect.value;
+      localStorage.setItem("shadow-resolution", size);
+      this.engine.setShadowResolution(parseInt(size, 10));
     });
 
     // パススルー
@@ -635,7 +637,9 @@ export class UIManager {
     });
 
     // シーン読み込みボタン（ファイル選択ダイアログを開く）
-    this.sceneLoadButton?.addEventListener("click", () => {
+    this.sceneLoadButton?.addEventListener("click", async () => {
+      // ファイル選択前に権限を確保（change ハンドラではユーザージェスチャが失われるため）
+      if (!(await this.ensureAssetsAccess())) return;
       this.sceneInput?.click();
     });
 
@@ -1650,7 +1654,6 @@ export class UIManager {
         shadowEnabled: this.shadowInput ? this.shadowInput.checked : true,
         gravity: this.gravityMagnitudeInput ? parseFloat(this.gravityMagnitudeInput.value) : 9.8,
         breastPhysicsEnabled: this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true,
-        breastPhysicsFps: this.breastPhysicsFpsInput ? parseInt(this.breastPhysicsFpsInput.value, 10) : 60,
         breastPhysicsInertia: this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0
       }
     };
@@ -1688,22 +1691,17 @@ export class UIManager {
         if (settings.breastPhysicsEnabled !== undefined && this.breastPhysicsToggle) {
           this.breastPhysicsToggle.checked = settings.breastPhysicsEnabled;
         }
-        if (settings.breastPhysicsFps !== undefined && this.breastPhysicsFpsInput) {
-          this.breastPhysicsFpsInput.value = settings.breastPhysicsFps;
-          if (this.breastPhysicsFpsValue) {
-            this.breastPhysicsFpsValue.textContent = settings.breastPhysicsFps;
-          }
-        }
         if (settings.breastPhysicsInertia !== undefined && this.breastPhysicsInertiaInput) {
-          this.breastPhysicsInertiaInput.value = settings.breastPhysicsInertia;
+          // 旧上限 5.0 を超える保存値もクリップせず反映（UI max は 10.0）
+          const inertia = Math.min(10.0, Math.max(0.0, parseFloat(settings.breastPhysicsInertia)));
+          this.breastPhysicsInertiaInput.value = inertia;
           if (this.breastPhysicsInertiaValue) {
-            this.breastPhysicsInertiaValue.textContent = parseFloat(settings.breastPhysicsInertia).toFixed(1);
+            this.breastPhysicsInertiaValue.textContent = inertia.toFixed(1);
           }
         }
         const bEnabled = this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true;
-        const bFps = this.breastPhysicsFpsInput ? parseInt(this.breastPhysicsFpsInput.value, 10) : 60;
         const bInertia = this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0;
-        this.mmdManager.updateBreastPhysicsSettings(bEnabled, bFps, bInertia);
+        this.mmdManager.updateBreastPhysicsSettings(bEnabled, bInertia);
       }
 
       // 2. 配置モデルのクリア
@@ -1869,6 +1867,7 @@ export class UIManager {
       loadBtn.style.fontSize = "11px";
       loadBtn.addEventListener("click", async () => {
         try {
+          if (!(await this.ensureAssetsAccess())) return;
           const sceneData = yaml.load(scene.data);
           await this.applySceneData(sceneData);
         } catch(e) {
@@ -1927,6 +1926,59 @@ export class UIManager {
     });
   }
 
+  /**
+   * ユーザー操作（クリック）内でアセットフォルダへの読み取り権限を確保する。
+   * File System Access API の確認ダイアログを、呼び出し元のジェスチャから直接表示する。
+   * @returns {Promise<boolean>} アクセス可能なら true
+   */
+  async ensureAssetsAccess() {
+    // File System Access API 非対応: すでに webkitdirectory 等で読み込み済みなら OK
+    if (!window.showDirectoryPicker) {
+      if (this.assetsFiles?.length > 0) return true;
+      this.setStatusText("アセットフォルダが未設定です。「アセットフォルダを設定・更新」から選択してください。");
+      return false;
+    }
+
+    if (!this.directoryHandle) {
+      if (this.assetsFiles?.length > 0) return true;
+      this.setStatusText("アセットフォルダが未設定です。「アセットフォルダを設定・更新」から選択してください。");
+      return false;
+    }
+
+    const opt = { mode: "read" };
+    let permission = await this.directoryHandle.queryPermission(opt);
+    if (permission !== "granted") {
+      // この呼び出しがクリックハンドラ先頭にある前提で確認ウィンドウを表示
+      permission = await this.directoryHandle.requestPermission(opt);
+    }
+
+    if (permission !== "granted") {
+      this.setStatusText(`アセットフォルダ「${this.directoryHandle.name}」へのアクセスが拒否されました。`);
+      return false;
+    }
+
+    // 未ロード、または前回ロードが空だった場合は再スキャン
+    if (!this.assetsFiles?.length) {
+      const loaded = await this.loadDirectoryHandle(this.directoryHandle);
+      if (!loaded) return false;
+    } else {
+      this.clearAssetsReconnectUi();
+    }
+    return true;
+  }
+
+  clearAssetsReconnectUi() {
+    if (!this.assetsPathDisplay || !this.directoryHandle) return;
+    this.assetsPathDisplay.textContent = `現在のアセットパス：${this.directoryHandle.name}`;
+    this.assetsPathDisplay.classList.remove("motion-empty");
+    this.assetsPathDisplay.style.cursor = "";
+    this.assetsPathDisplay.title = "";
+    if (this._assetsPathReconnectHandler) {
+      this.assetsPathDisplay.removeEventListener("click", this._assetsPathReconnectHandler);
+      this._assetsPathReconnectHandler = null;
+    }
+  }
+
   // 保存されたディレクトリハンドルの復元
   async restoreDirectoryHandle() {
     if (!window.showDirectoryPicker) return;
@@ -1943,16 +1995,10 @@ export class UIManager {
           this.assetsPathDisplay.title = "クリックしてアクセス許可を付与し、再読み込みします";
           
           // パス表示部分のクリックでも復元できるようにイベント登録
-          const clickHandler = async () => {
-            const permission = await handle.requestPermission({ mode: "read" });
-            if (permission === "granted") {
-              await this.loadDirectoryHandle(handle);
-              this.assetsPathDisplay.removeEventListener("click", clickHandler);
-              this.assetsPathDisplay.style.cursor = "";
-              this.assetsPathDisplay.title = "";
-            }
+          this._assetsPathReconnectHandler = async () => {
+            await this.ensureAssetsAccess();
           };
-          this.assetsPathDisplay.addEventListener("click", clickHandler);
+          this.assetsPathDisplay.addEventListener("click", this._assetsPathReconnectHandler);
         }
 
         // すでに権限がある場合は自動でロード（セッション内リロード等）
@@ -1960,7 +2006,7 @@ export class UIManager {
         if (currentPermission === "granted") {
           await this.loadDirectoryHandle(handle);
         } else {
-          this.setStatusText(`保存されているアセットフォルダ「${handle.name}」へのアクセス許可が必要です。アセットフォルダ設定ボタンまたはパス表示をクリックしてください。`);
+          this.setStatusText(`保存されているアセットフォルダ「${handle.name}」へのアクセス許可が必要です。「モデル追加」「シーン適用」、またはアセットフォルダ設定／パス表示から再接続してください。`);
         }
       }
     } catch (e) {
@@ -1969,12 +2015,26 @@ export class UIManager {
   }
 
   // ディレクトリハンドルからファイルを列挙し、アセットフォルダとして設定
+  // @returns {Promise<boolean>} 1件以上読み込めたら true
   async loadDirectoryHandle(handle) {
     this.showLoading(true, "アセットフォルダをスキャン中...");
     try {
       const files = [];
       const getFilesRecursively = async (dirHandle, path = "") => {
-        for await (const entry of dirHandle.values()) {
+        let entries;
+        try {
+          entries = [];
+          for await (const entry of dirHandle.values()) {
+            entries.push(entry);
+          }
+        } catch (listErr) {
+          // ルート直下の列挙失敗は呼び出し元へ。サブフォルダはスキップして継続
+          if (!path) throw listErr;
+          console.warn(`Failed to list directory ${path}:`, listErr);
+          return;
+        }
+
+        for (const entry of entries) {
           if (entry.kind === "file") {
             try {
               const file = await entry.getFile();
@@ -1986,28 +2046,40 @@ export class UIManager {
               });
               files.push(file);
             } catch (fileErr) {
-              console.warn(`Failed to get file ${entry.name}:`, fileErr);
+              console.warn(`Failed to get file ${path ? path + "/" : ""}${entry.name}:`, fileErr);
             }
           } else if (entry.kind === "directory") {
             const nextPath = path ? `${path}/${entry.name}` : entry.name;
-            await getFilesRecursively(entry, nextPath);
+            try {
+              await getFilesRecursively(entry, nextPath);
+            } catch (dirErr) {
+              console.warn(`Failed to scan directory ${nextPath}:`, dirErr);
+            }
           }
         }
       };
 
       await getFilesRecursively(handle);
-      await this.handleAssetsDirectorySelected(files);
-      
-      // パス表示を「再接続が必要」から正常な表示に更新
-      if (this.assetsPathDisplay) {
-        this.assetsPathDisplay.textContent = `現在のアセットパス：${handle.name}`;
-        this.assetsPathDisplay.classList.remove("motion-empty");
-        this.assetsPathDisplay.style.cursor = "";
-        this.assetsPathDisplay.title = "";
+
+      if (files.length === 0) {
+        this.setStatusText(
+          `アセットフォルダ「${handle.name}」からファイルを読み込めませんでした。フォルダが移動・削除されていないか確認し、「アセットフォルダを設定・更新」から再選択してください。`
+        );
+        return false;
       }
+
+      await this.handleAssetsDirectorySelected(files);
+      this.clearAssetsReconnectUi();
+      return true;
     } catch (e) {
       console.error(e);
-      this.setStatusText(`アセットフォルダの読み込みに失敗しました: ${e.message}`);
+      const isNotFound = e?.name === "NotFoundError";
+      this.setStatusText(
+        isNotFound
+          ? `アセットフォルダ「${handle.name}」が見つかりません。移動・削除された可能性があるため、「アセットフォルダを設定・更新」から再選択してください。`
+          : `アセットフォルダの読み込みに失敗しました: ${e.message}`
+      );
+      return false;
     } finally {
       this.showLoading(false);
     }

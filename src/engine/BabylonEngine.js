@@ -90,11 +90,15 @@ export class BabylonEngine {
     const havokInstance = await HavokPhysics({
       locateFile: () => havokWasmUrl
     });
-    // useDeltaForWorldStep = false にして時間ステップを固定化
+    // useDeltaForWorldStep = false: 各物理ステップは固定 dt で進める
+    // setSubTimeStep により描画 FPS（制限含む）ではなく実時間で 60Hz 分ステップする
     this.physicsPlugin = new HavokPlugin(false, havokInstance);
     this.scene.enablePhysics(new Vector3(0, -9.8 * 12.5, 0), this.physicsPlugin); // MMDスケールを考慮
-    // タイムステップを 1/60s (約16.6ms) に固定
-    this.physicsPlugin.setTimeStep(1 / 60);
+    const physicsEngine = this.scene.getPhysicsEngine();
+    if (physicsEngine) {
+      physicsEngine.setTimeStep(1 / 60);
+      physicsEngine.setSubTimeStep(1000 / 60);
+    }
 
     // カメラの初期化
     this.camera = new ArcRotateCamera(

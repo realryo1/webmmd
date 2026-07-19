@@ -1,5 +1,11 @@
 import { SceneLoader, FileTools, Vector3, Quaternion } from "@babylonjs/core";
-import { MmdRuntime, MmdPhysics, VmdLoader } from "babylon-mmd";
+import { MmdRuntime, MmdPhysics, VmdLoader, PmxLoader } from "babylon-mmd";
+
+// babylon-mmd 共有 MaterialBuilder のトゥーンエッジ（アウトライン）適用を無効化
+const sharedMmdMaterialBuilder = new PmxLoader().materialBuilder;
+if (sharedMmdMaterialBuilder) {
+  sharedMmdMaterialBuilder.loadOutlineRenderingProperties = () => {};
+}
 
 // 1x1透明PNGのBase64データからBlob URLを生成するヘルパー
 const DUMMY_PNG_DATA = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -37,7 +43,6 @@ export class MmdManager {
   fileMap = new Map(); // relativePath -> blobUrl
 
   breastPhysicsEnabled = true;
-  breastPhysicsFps = 60;
   breastPhysicsInertia = 1.0;
   physicsDisableGlobally = false;
   loopEnabled = false;
@@ -53,6 +58,9 @@ export class MmdManager {
     this.mmdPhysics = mmdPhysics;
     this.mmdRuntime = new MmdRuntime(scene, mmdPhysics);
     this.mmdRuntime.register(scene);
+
+    // 描画 FPS 非依存の 60Hz 固定ステップを適用
+    this._applyPhysicsTimestep();
 
 
     // 音声同期用オブザーバーの登録
@@ -309,6 +317,9 @@ export class MmdManager {
 
     // モデルのスケールは常に等倍（1.0）
     mesh.scaling.set(1.0, 1.0, 1.0);
+
+    // トゥーンエッジ（アウトライン）を全マテリアルで無効化
+    this._disableModelOutlines(mesh);
 
     // シャドウジェネレーターにメッシュを追加
     const shadowGenerator = this.scene.lights.find(l => l.name === "dirLight")?._shadowGenerator;
@@ -804,6 +815,29 @@ export class MmdManager {
   }
 
 
+  /** モデル配下の全マテリアルでアウトライン描画を無効化する */
+  _disableModelOutlines(rootMesh) {
+    const meshes = rootMesh.getChildMeshes
+      ? [rootMesh, ...rootMesh.getChildMeshes(false)]
+      : [rootMesh];
+
+    for (const mesh of meshes) {
+      const materials = [];
+      if (mesh.material) {
+        if (mesh.material.subMaterials) {
+          materials.push(...mesh.material.subMaterials);
+        } else {
+          materials.push(mesh.material);
+        }
+      }
+      for (const material of materials) {
+        if (material && "renderOutline" in material) {
+          material.renderOutline = false;
+        }
+      }
+    }
+  }
+
   // PMXメタデータ（剛体・ジョイント）を走査して自動最適化する
   _optimizeModelPhysicsMetadata(mesh) {
     if (!mesh.metadata || !mesh.metadata.rigidBodies) return;
@@ -951,14 +985,14 @@ export class MmdManager {
     let optimizedCount = 0;
 
     const enabled = this.breastPhysicsEnabled && this.breastPhysicsInertia > 0.0;
-    const fps = this.breastPhysicsFps || 60;
     const inertia = this.breastPhysicsInertia;
 
-    // 揺れやすさ係数 shakeFactor = inertia * (60 / fps)
-    const shakeFactor = inertia * (60 / fps);
-
-    // 揺れやすさ係数に応じたダンピング係数の計算
-    const dampingValue = enabled ? Math.max(0.05, 1.0 - 0.7 * shakeFactor) : 1.0;
+    // 慣性力倍率 1.0 で従来相当の減衰。高倍率でも効き続けるよう漸近曲線にする
+    // inertia=1 → ≈0.30 / inertia=5 → ≈0.08 / inertia=10 → ≈0.04
+    const linearDamping = enabled ? Math.max(0.02, 1.0 / (1.0 + 2.3 * inertia)) : 1.0;
+    const angularDamping = enabled ? Math.max(0.015, 1.0 / (1.0 + 3.0 * inertia)) : 1.0;
+    // 倍率に応じて重力影響を少し強め、揺れの戻りを大きくする
+    const gravityFactor = enabled ? Math.min(2.5, 0.7 + 0.3 * inertia) : 0.0;
 
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
@@ -998,11 +1032,10 @@ export class MmdManager {
               body.enableSimulation();
             }
 
-            // 重力を復元（標準の1.0）
             if (typeof body.setGravityFactor === "function") {
-              body.setGravityFactor(1.0);
+              body.setGravityFactor(gravityFactor);
             } else {
-              body.gravityFactor = 1.0;
+              body.gravityFactor = gravityFactor;
             }
 
             // 衝突判定はめり込みによる暴走を防ぐため無効化したままとする (これで安定した揺れが保証される)
@@ -1011,23 +1044,22 @@ export class MmdManager {
               body.shape.filterCollideMask = 0;
             }
 
-            // 強度に応じたダンピングの動的適用
             if (typeof body.setLinearDamping === "function") {
-              body.setLinearDamping(dampingValue);
+              body.setLinearDamping(linearDamping);
             } else {
-              body.linearDamping = dampingValue;
+              body.linearDamping = linearDamping;
             }
             if (typeof body.setAngularDamping === "function") {
-              body.setAngularDamping(dampingValue);
+              body.setAngularDamping(angularDamping);
             } else {
-              body.angularDamping = dampingValue;
+              body.angularDamping = angularDamping;
             }
           }
           optimizedCount++;
         }
       }
     }
-    console.log(`[Physics Optimization] Breast settings updated. Enabled: ${enabled}, Fps: ${fps}, Inertia: ${inertia}, Optimized: ${optimizedCount} bodies.`);
+    console.log(`[Physics Optimization] Breast settings updated. Enabled: ${enabled}, Inertia: ${inertia}, Optimized: ${optimizedCount} bodies.`);
   }
 
   // 体幹剛体の物理を直接最適化（物理演算による上書きを完全に防ぐ）
@@ -1084,9 +1116,27 @@ export class MmdManager {
     console.log(`[Physics Optimization] Body base settings updated. Optimized: ${optimizedCount} bodies.`);
   }
 
-  updateBreastPhysicsSettings(enabled, fps, inertia) {
+  /**
+   * 物理ワールドを 60Hz 固定ステップにする。
+   * setSubTimeStep により描画 FPS（制限含む）に依存せず実時間で進める。
+   */
+  _applyPhysicsTimestep() {
+    if (!this.scene || typeof this.scene.getPhysicsEngine !== "function") return;
+    const physicsEngine = this.scene.getPhysicsEngine();
+    if (!physicsEngine) return;
+
+    if (this.physicsDisableGlobally) {
+      physicsEngine.setTimeStep(0);
+      physicsEngine.setSubTimeStep(0);
+      return;
+    }
+
+    physicsEngine.setTimeStep(1 / 60);
+    physicsEngine.setSubTimeStep(1000 / 60);
+  }
+
+  updateBreastPhysicsSettings(enabled, inertia) {
     this.breastPhysicsEnabled = enabled;
-    this.breastPhysicsFps = fps;
     this.breastPhysicsInertia = inertia;
 
     for (const model of this.deployedModels.values()) {
@@ -1102,17 +1152,8 @@ export class MmdManager {
     if (this.mmdRuntime) {
       this.mmdRuntime.physicsEnabled = !disabled;
     }
-    
-    if (this.scene && typeof this.scene.getPhysicsEngine === "function") {
-      const physicsEngine = this.scene.getPhysicsEngine();
-      if (physicsEngine) {
-        if (disabled) {
-          physicsEngine.setTimeStep(0);
-        } else {
-          physicsEngine.setTimeStep(1 / 60);
-        }
-      }
-    }
+
+    this._applyPhysicsTimestep();
     
     for (const model of this.deployedModels.values()) {
       if (model.mmdModel) {

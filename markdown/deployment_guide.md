@@ -35,7 +35,7 @@ npm install
 
 1. ターミナルで以下のコマンドを実行する。
 
-```bash
+```
 npm run dev
 ```
 

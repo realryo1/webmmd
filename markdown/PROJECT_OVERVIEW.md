@@ -81,6 +81,8 @@ mmd/
 | localStorage | `physics-disable-globally` | 物理演算のグローバル無効化 |
 | localStorage | `fps-limit-enabled` | フレームレート制限の有効 / 無効 |
 | localStorage | `fps-limit-value` | フレームレート制限の目標値（デフォルト: `60`） |
+| localStorage | `pixel-ratio` | 画質上限（ピクセル比。デフォルト: `1`） |
+| localStorage | `shadow-resolution` | シャドウ解像度（デフォルト: `1024`） |
 | localStorage | `webmmd-panel-states` | 操作パネルの開閉状態および表示位置 |
 | localStorage | `webmmd-saved-scenes` | 保存シーン一覧（各要素の `data` は YAML 文字列） |
 
@@ -98,7 +100,7 @@ mmd/
 
 ### 物理演算 (Havok) & MMD 物理の最適化
 WASM ベースの高速物理エンジン **Havok** を採用しています（WASM は Vite 経由で同梱し、CDN は使用しません）。
-- **タイムステップの固定化**: FPS 変動時の物理挙動を安定させるため、`useDeltaForWorldStep = false` および `setTimeStep(1 / 60)` により物理ワールドのタイムステップを 1/60s（約16.6ms）に固定しています。
+- **タイムステップの固定化（描画 FPS 非依存）**: `useDeltaForWorldStep = false` と `setTimeStep(1/60)` / `setSubTimeStep(1000/60)` により、描画側の FPS 制限に依存せず実時間で 60Hz 物理ステップします。胸の揺れ強度は慣性力倍率（0〜10）のみで調整します。
 - **重力の同期**: 重力設定（標準 `9.8`）は MMD スケール（約 `12.5` 倍）に自動変換されて物理ワールドへ同期されます。
 - **骨格・物理の自動最適化 (`MmdManager.js`)**:
   - **突き抜け・暴走防止**: 体幹・基幹ボーン（センター、腰、頭など）の剛体について、物理モードを `FollowBone` (0) に設定し、衝突シミュレーションから除外します。不要な剛体（下着やパンツなど）も自動で衝突対象から除外されます。

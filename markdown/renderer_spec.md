@@ -41,7 +41,7 @@ index.html (#renderCanvas)
 | Havok | WASM を Vite `?url` で同梱（CDN 不使用） |
 | `HavokPlugin` | `useDeltaForWorldStep = false` |
 | 重力初期値 | `(0, -9.8 * 12.5, 0)`（MMD スケール 12.5 倍） |
-| 物理タイムステップ | `1/60` 秒固定 |
+| 物理タイムステップ | `setTimeStep(1/60)` + `setSubTimeStep(1000/60)`（描画 FPS 非依存の 60Hz 固定） |
 | Camera | `ArcRotateCamera` — α=`-π/2`, β=`π/2-0.1`, radius=`30`, target=`(0,10,0)` |
 | Camera 制限 | `wheelPrecision=15`, `pinchPrecision=200`, radius `1`〜`200` |
 | HemisphericLight | intensity `0.5` |
@@ -202,8 +202,8 @@ Babylon の session end がオブザーバより後に `customAnimationFrameRequ
 
 | API | 内容 |
 |---|---|
-| `updateBreastPhysicsSettings(enabled, fps, inertia)` | 胸物理。`shakeFactor = inertia * (60/fps)`。衝突マスクは常に 0 |
-| `setPhysicsDisableGlobally` | `mmdPhysics` / 各モデルの物理 OFF、`setTimeStep(0)` または `1/60` |
+| `updateBreastPhysicsSettings(enabled, inertia)` | 胸物理。ダンピング／重力係数を `inertia`（0〜10）で調整。衝突マスクは常に 0 |
+| `setPhysicsDisableGlobally` | `mmdPhysics` / 各モデルの物理 OFF、`setTimeStep(0)` + `setSubTimeStep(0)`、復帰時は 60Hz を再適用 |
 
 ---
 
@@ -235,8 +235,8 @@ Babylon の session end がオブザーバより後に `customAnimationFrameRequ
 | `.shadow-toggle` | `setShadowEnabled` | HTML 上 unchecked |
 | `.gravity-magnitude-input` | `setGravity` | `9.8`（実効 `-9.8*12.5`）、range 0.1–50 |
 | `.breast-physics-*` | `updateBreastPhysicsSettings` | ON, 60Hz, inertia 1.0 |
-| `.pixel-ratio-select` | `setPixelRatio` | 1 / 1.5 / 2 |
-| `.shadow-resolution-select` | `setShadowResolution` | 256 / 512 / **1024** |
+| `.pixel-ratio-select` | `setPixelRatio` | 1 / 1.5 / 2（`pixel-ratio`、default `1`） |
+| `.shadow-resolution-select` | `setShadowResolution` | 256 / 512 / **1024**（`shadow-resolution`、default `1024`） |
 | `.vr-passthrough-toggle` | `setPassthroughEnabled` | `vr-passthrough-enabled` |
 | `.fps-limit-toggle` + `.fps-limit-input` | `setFpsLimit` | `fps-limit-enabled` / `fps-limit-value`（default 60） |
 | `.physics-disable-toggle` | `setPhysicsDisableGlobally` | `physics-disable-globally` |
