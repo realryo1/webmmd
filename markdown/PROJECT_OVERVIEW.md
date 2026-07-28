@@ -84,6 +84,7 @@ mmd/
 | localStorage | `pixel-ratio` | 画質上限（ピクセル比。デフォルト: `1`） |
 | localStorage | `shadow-resolution` | シャドウ解像度（デフォルト: `1024`） |
 | localStorage | `webmmd-panel-states` | 操作パネルの開閉状態および表示位置 |
+| localStorage | `webmmd-sidebar-width` | PC（横長）表示時の左カラム幅（px） |
 | localStorage | `webmmd-saved-scenes` | 保存シーン一覧（各要素の `data` は YAML 文字列） |
 
 シーンの入出力には `js-yaml` を使用します（エクスポートは `.yaml` ダウンロード）。
@@ -112,6 +113,10 @@ WASM ベースの高速物理エンジン **Havok** を採用しています（W
 - `onBeforeRenderObservable` にて `MmdRuntime.currentTime` と音声 `currentTime` のズレを監視します。
 - ズレが `0.05` 秒超で `playbackRate` を `1.02` / `0.98` に微調整、`2.0` 秒以上で強制シークします。
 - `readyState < 2` のときは同期をスキップし、デコード待ちによるフリーズを防ぎます。
+
+### モーション設定のディレクトリツリー表示
+- 配置モデルごとの「モーション設定」では、アセットフォルダ直下の `motion` フォルダ内にある `.vmd` ファイルのみを対象とし、`webkitRelativePath` のディレクトリ構造に沿ってグループ化して `<details>` による折りたたみ式の再帰ツリーで表示します（例: `motion/test1` / `motion/test2` → 2 グループ）。各グループの見出しにはディレクトリ名と件数を表示し、絞り込み中は該当グループを自動展開します。
+- 旧来のモーション選択モーダル（`#motion-select-modal`）は未使用のため削除済みです。
 
 ### カメラ制御
 - **デスクトップ**: ユーザー操作の `ArcRotateCamera`（半径 1〜200）。

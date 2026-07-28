@@ -43,6 +43,21 @@ async function main() {
     return;
   }
 
+  // Babylon 初期化前にサイドバー幅を復元し、キャンバスサイズのズレを防ぐ
+  try {
+    const savedSidebarWidth = localStorage.getItem("webmmd-sidebar-width");
+    if (savedSidebarWidth) {
+      const parsed = parseInt(savedSidebarWidth, 10);
+      if (!Number.isNaN(parsed) && parsed >= 200) {
+        const maxWidth = Math.max(200, Math.floor(window.innerWidth * 0.5));
+        const width = Math.min(maxWidth, parsed);
+        document.documentElement.style.setProperty("--sidebar-width", `${width}px`);
+      }
+    }
+  } catch (_) {
+    // localStorage 不可時はデフォルト幅のまま続行
+  }
+
   // 1. Babylon.js エンジン・物理の初期化
   const babylonEngine = new BabylonEngine();
   await babylonEngine.initialize(canvas);

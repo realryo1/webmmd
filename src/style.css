@@ -1,4 +1,5 @@
 :root {
+    --sidebar-width: 280px;
     color: #e8edf2;
     font-synthesis: none;
     text-rendering: optimizelegibility;
@@ -30,7 +31,7 @@ select {
 }
 
 .app-shell {
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
     width: 100%;
     height: 100vh;
     height: 100dvh;
@@ -39,6 +40,7 @@ select {
 }
 
 .sidebar {
+    position: relative;
     background: #191d22;
     border-right: 1px solid #2c323a;
     flex-direction: column;
@@ -47,6 +49,45 @@ select {
     display: flex;
     overflow-y: auto;
     scrollbar-width: none;
+}
+
+.sidebar-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 20;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+}
+
+.sidebar-resizer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 2px;
+    width: 2px;
+    background: transparent;
+    transition: background 0.15s ease;
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after,
+body.sidebar-resizing .sidebar-resizer::after {
+    background: #5b8def;
+}
+
+body.sidebar-resizing {
+    cursor: col-resize;
+    user-select: none;
+}
+
+body.sidebar-resizing iframe,
+body.sidebar-resizing canvas {
+    pointer-events: none;
 }
 
 .sidebar::-webkit-scrollbar {
@@ -307,6 +348,22 @@ select {
     overflow-wrap: anywhere
 }
 
+.motion-group > summary {
+    color: #c7d1dc;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.5;
+    padding: 4px 0;
+    user-select: none
+}
+
+.motion-group__children {
+    border-left: 1px solid rgba(199, 209, 220, 0.25);
+    margin-left: 6px;
+    padding-left: 10px
+}
+
 .motion-remove-button {
     color: #aeb9c5;
     cursor: pointer;
@@ -515,6 +572,10 @@ select {
         border-right: 0
     }
 
+    .sidebar-resizer {
+        display: none
+    }
+
     .viewer:not(:fullscreen) {
         height: 40vh;
     }
@@ -535,6 +596,10 @@ select {
         border-bottom: 1px solid #2c323a;
         flex: 1;
         order: 1
+    }
+
+    .sidebar-resizer {
+        display: none
     }
 
     .viewer:not(:fullscreen) {

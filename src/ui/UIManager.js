@@ -32,7 +32,6 @@ export class UIManager {
   assetsDirectoryInput = null;
   assetsPathDisplay = null;
   assetsModelList = null;
-  assetsMotionList = null;
   deployedModelsList = null;
 
   playPauseButton = null;
@@ -44,10 +43,6 @@ export class UIManager {
   closeModelModal = null;
   modalModelList = null;
 
-  motionSelectModal = null;
-  closeMotionModal = null;
-  modalMotionList = null;
-  currentMotionTargetModelId = null;
   assetsFiles = [];
 
   overlayPlaybackButton = null;
@@ -72,6 +67,7 @@ export class UIManager {
 
     this.initElements();
     this.setupEvents();
+    this.setupSidebarResize();
     this.restoreDirectoryHandle();
     this.setupConsoleHook();
   }
@@ -178,7 +174,6 @@ export class UIManager {
     this.assetsDirectoryInput = document.getElementById("assets-directory-input");
     this.assetsPathDisplay = document.getElementById("assets-path-display");
     this.assetsModelList = document.getElementById("assets-model-list");
-    this.assetsMotionList = document.getElementById("assets-motion-list");
     this.deployedModelsList = document.getElementById("deployed-models-list");
     
     this.playPauseButton = document.querySelector(".play-pause-button");
@@ -188,10 +183,6 @@ export class UIManager {
     this.modelSelectModal = document.getElementById("model-select-modal");
     this.closeModelModal = document.getElementById("close-model-modal");
     this.modalModelList = document.getElementById("modal-model-list");
-
-    this.motionSelectModal = document.getElementById("motion-select-modal");
-    this.closeMotionModal = document.getElementById("close-motion-modal");
-    this.modalMotionList = document.getElementById("modal-motion-list");
 
     // VROverlayの再生・停止ボタンも紐付け
     this.overlayPlaybackButton = document.querySelector(".overlay-playback-toggle");
@@ -228,6 +219,126 @@ export class UIManager {
     this.updateSavedScenesList();
   }
 
+  setupSidebarResize() {
+    const DEFAULT_WIDTH = 280;
+    const MIN_WIDTH = 200;
+    const STORAGE_KEY = "webmmd-sidebar-width";
+    const resizer = document.querySelector(".sidebar-resizer");
+    if (!resizer) return;
+
+    const isDesktopLayout = () =>
+      window.matchMedia("(min-width: 761px) and (orientation: landscape)").matches;
+
+    const clampWidth = (width) => {
+      const maxWidth = Math.max(MIN_WIDTH, Math.floor(window.innerWidth * 0.5));
+      return Math.min(maxWidth, Math.max(MIN_WIDTH, Math.round(width)));
+    };
+
+    const getCurrentWidth = () => {
+      const raw = getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width");
+      const parsed = parseInt(raw, 10);
+      return Number.isNaN(parsed) ? DEFAULT_WIDTH : parsed;
+    };
+
+    const applyWidth = (width, { save = false, notify = true } = {}) => {
+      const next = clampWidth(width);
+      const prev = getCurrentWidth();
+      document.documentElement.style.setProperty("--sidebar-width", `${next}px`);
+      if (save) {
+        try {
+          localStorage.setItem(STORAGE_KEY, String(next));
+        } catch (e) {
+          console.warn("Failed to save sidebar width:", e);
+        }
+      }
+      if (notify && next !== prev) {
+        window.dispatchEvent(new Event("resize"));
+      }
+      return next;
+    };
+
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!Number.isNaN(parsed)) {
+          applyWidth(parsed, { notify: false });
+          // CSS レイアウト反映後にキャンバス解像度を同期（通知しないと押しつぶされたままになる）
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              this.engine?.handleResize?.();
+            });
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load sidebar width:", e);
+    }
+
+    let dragging = false;
+    let moveRaf = 0;
+    let lastClientX = 0;
+
+    const onPointerMove = (e) => {
+      if (!dragging) return;
+      lastClientX = e.clientX;
+      if (moveRaf) return;
+      moveRaf = requestAnimationFrame(() => {
+        moveRaf = 0;
+        applyWidth(lastClientX);
+      });
+    };
+
+    const onPointerUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove("sidebar-resizing");
+      if (moveRaf) {
+        cancelAnimationFrame(moveRaf);
+        moveRaf = 0;
+      }
+      applyWidth(lastClientX, { save: true });
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+
+    resizer.addEventListener("pointerdown", (e) => {
+      if (!isDesktopLayout() || e.button !== 0) return;
+      e.preventDefault();
+      dragging = true;
+      lastClientX = e.clientX;
+      document.body.classList.add("sidebar-resizing");
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+    });
+
+    resizer.addEventListener("dblclick", () => {
+      if (!isDesktopLayout()) return;
+      applyWidth(DEFAULT_WIDTH, { save: true });
+    });
+
+    resizer.addEventListener("keydown", (e) => {
+      if (!isDesktopLayout()) return;
+      const step = e.shiftKey ? 40 : 16;
+      const current = getCurrentWidth();
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        applyWidth(current - step, { save: true });
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        applyWidth(current + step, { save: true });
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        applyWidth(DEFAULT_WIDTH, { save: true });
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      if (!isDesktopLayout()) return;
+      applyWidth(getCurrentWidth(), { notify: false });
+    });
+  }
+
   setupEvents() {
     // モーダルの開閉イベント登録
     this.addModelWindowButton?.addEventListener("click", async () => {
@@ -240,15 +351,6 @@ export class UIManager {
     this.modelSelectModal?.addEventListener("click", (e) => {
       if (e.target === this.modelSelectModal) {
         this.modelSelectModal?.setAttribute("hidden", "");
-      }
-    });
-
-    this.closeMotionModal?.addEventListener("click", () => {
-      this.motionSelectModal?.setAttribute("hidden", "");
-    });
-    this.motionSelectModal?.addEventListener("click", (e) => {
-      if (e.target === this.motionSelectModal) {
-        this.motionSelectModal?.setAttribute("hidden", "");
       }
     });
 
@@ -522,9 +624,6 @@ export class UIManager {
         this.exitPseudoFullscreen();
       }
     });
-
-
-
 
     // パネルの折りたたみ制御
     const panelHeaders = document.querySelectorAll(".panel-header");
@@ -892,9 +991,8 @@ export class UIManager {
         }
       }
 
-      // アセットモデルリスト、モーションリストの更新（カメラモーションは無効化）
+      // アセットモデルリストの更新（カメラモーションは無効化）
       this.updateAssetsModelList(fileList);
-      this.updateAssetsMotionList(fileList);
       // this.updateCameraMotionList(fileList);
 
       this.setStatusText(`アセットフォルダが設定されました。ファイル数: ${fileList.length}`);
@@ -955,91 +1053,148 @@ export class UIManager {
     });
   }
 
-  updateAssetsMotionList(files) {
-    if (!this.modalMotionList) return;
-    this.modalMotionList.innerHTML = "";
+  buildMotionTree(vmdFiles) {
+    const root = { dirs: new Map(), files: [] };
+    for (const file of vmdFiles) {
+      const relativePath = (file.webkitRelativePath || file.name).replace(/\\/g, "/");
+      const segments = relativePath.split("/");
+      segments.pop();
+      // 先頭セグメントはアセットルート名で全ファイル共通のため表示から除外
+      if (segments.length > 0) segments.shift();
 
-    const vmdFiles = files.filter(file => {
-      const name = file.name.toLowerCase();
-      return name.endsWith(".vmd");
-    });
+      let node = root;
+      for (const dirName of segments) {
+        if (!node.dirs.has(dirName)) {
+          node.dirs.set(dirName, { dirs: new Map(), files: [] });
+        }
+        node = node.dirs.get(dirName);
+      }
+      node.files.push(file);
+    }
+    return root;
+  }
 
-    if (vmdFiles.length === 0) {
-      this.modalMotionList.innerHTML = `<p class="motion-empty">モーションファイル (.vmd) が見つかりません。</p>`;
-      return;
+  countMotionFiles(node) {
+    let count = node.files.length;
+    for (const child of node.dirs.values()) {
+      count += this.countMotionFiles(child);
+    }
+    return count;
+  }
+
+  renderMotionGroup(node, container, model, { openGroups = false, openPaths = null, pathPrefix = "" } = {}) {
+    const sortedDirs = [...node.dirs.entries()].sort((a, b) => a[0].localeCompare(b[0], "ja"));
+    for (const [dirName, child] of sortedDirs) {
+      const path = pathPrefix ? `${pathPrefix}/${dirName}` : dirName;
+      const details = document.createElement("details");
+      details.className = "motion-group";
+      details.dataset.motionPath = path;
+      if (openGroups || (openPaths && openPaths.has(path))) {
+        details.open = true;
+      }
+
+      const summary = document.createElement("summary");
+      summary.textContent = `${dirName} (${this.countMotionFiles(child)})`;
+      details.appendChild(summary);
+
+      const children = document.createElement("div");
+      children.className = "motion-group__children";
+      details.appendChild(children);
+
+      container.appendChild(details);
+      this.renderMotionGroup(child, children, model, { openGroups, openPaths, pathPrefix: path });
     }
 
-    vmdFiles.forEach(file => {
-      const item = document.createElement("div");
-      item.className = "motion-entry";
-      item.style.display = "flex";
-      item.style.justifyContent = "space-between";
-      item.style.alignItems = "center";
-      item.style.padding = "4px 0";
+    const sortedFiles = [...node.files].sort((a, b) => a.name.localeCompare(b.name, "ja"));
+    for (const file of sortedFiles) {
+      container.appendChild(this.createMotionEntry(file, model));
+    }
+  }
 
-      const span = document.createElement("span");
-      span.textContent = file.name;
-      span.style.overflow = "hidden";
-      span.style.textOverflow = "ellipsis";
-      span.style.whiteSpace = "nowrap";
-      span.style.fontSize = "12px";
-      span.style.flex = "1";
-      span.style.marginRight = "8px";
+  getFileBaseName(fileName) {
+    const name = String(fileName).replace(/\\/g, "/");
+    const lastSlash = name.lastIndexOf("/");
+    const fileNameOnly = lastSlash !== -1 ? name.substring(lastSlash + 1) : name;
+    const dotIdx = fileNameOnly.lastIndexOf(".");
+    return (dotIdx !== -1 ? fileNameOnly.substring(0, dotIdx) : fileNameOnly).toLowerCase();
+  }
 
-      const motionPath = file.webkitRelativePath || file.name;
-      const cleanMotionPath = motionPath.replace(/\\/g, "/").toLowerCase();
-      let isApplied = false;
-      let matchedKey = motionPath;
-
-      if (this.currentMotionTargetModelId) {
-        const model = this.mmdManager.deployedModels.get(this.currentMotionTargetModelId);
-        if (model) {
-          for (const key of model.motions.keys()) {
-            if (key.replace(/\\/g, "/").toLowerCase() === cleanMotionPath) {
-              isApplied = true;
-              matchedKey = key;
-              break;
-            }
-          }
-        }
-      }
-
-      const applyBtn = document.createElement("button");
-      applyBtn.textContent = isApplied ? "解除" : "適用";
-      applyBtn.className = "action-button";
-      applyBtn.style.width = "auto";
-      applyBtn.style.minHeight = "24px";
-      applyBtn.style.padding = "2px 8px";
-      applyBtn.style.fontSize = "11px";
-      if (isApplied) {
-        applyBtn.style.background = "#8e3c3c";
-        applyBtn.style.borderColor = "#a64949";
-      }
-
-      applyBtn.addEventListener("click", async () => {
-        this.motionSelectModal?.setAttribute("hidden", "");
-        if (this.currentMotionTargetModelId) {
-          if (isApplied) {
-            const model = this.mmdManager.deployedModels.get(this.currentMotionTargetModelId);
-            if (model) {
-              if (model.audio) {
-                model.audio.pause();
-                model.audio = null;
-              }
-              this.mmdManager.removeMotion(matchedKey, this.currentMotionTargetModelId);
-            }
-            this.updateDeployedModelsList();
-            this.setStatusText("モーションを解除しました。");
-          } else {
-            await this.handleMotionLoadForModel(file, this.currentMotionTargetModelId);
-          }
-        }
-      });
-
-      item.appendChild(span);
-      item.appendChild(applyBtn);
-      this.modalMotionList.appendChild(item);
+  hasCompanionAudio(motionFileName) {
+    const base = this.getFileBaseName(motionFileName);
+    return (this.assetsFiles || []).some(f => {
+      const lower = f.name.toLowerCase();
+      if (!lower.endsWith(".wav") && !lower.endsWith(".mp3")) return false;
+      return this.getFileBaseName(f.name) === base;
     });
+  }
+
+  formatMotionDisplayName(fileName) {
+    const name = String(fileName).replace(/\\/g, "/");
+    const lastSlash = name.lastIndexOf("/");
+    const displayName = lastSlash !== -1 ? name.substring(lastSlash + 1) : name;
+    return this.hasCompanionAudio(displayName) ? `♪${displayName}` : displayName;
+  }
+
+  createMotionEntry(file, model) {
+    const item = document.createElement("div");
+    item.className = "motion-entry";
+    item.style.display = "flex";
+    item.style.justifyContent = "space-between";
+    item.style.alignItems = "center";
+    item.style.padding = "4px 0";
+
+    const span = document.createElement("span");
+    span.textContent = this.formatMotionDisplayName(file.name);
+    span.style.overflow = "hidden";
+    span.style.textOverflow = "ellipsis";
+    span.style.whiteSpace = "nowrap";
+    span.style.fontSize = "10px";
+    span.style.color = "#c7d1dc";
+    span.style.flex = "1";
+    span.style.marginRight = "8px";
+
+    const motionPath = file.webkitRelativePath || file.name;
+    const cleanMotionPath = motionPath.replace(/\\/g, "/").toLowerCase();
+    let isApplied = false;
+    let matchedKey = motionPath;
+
+    for (const key of model.motions.keys()) {
+      if (key.replace(/\\/g, "/").toLowerCase() === cleanMotionPath) {
+        isApplied = true;
+        matchedKey = key;
+        break;
+      }
+    }
+
+    const applyBtn = document.createElement("button");
+    applyBtn.textContent = isApplied ? "解除" : "適用";
+    applyBtn.className = "action-button";
+    applyBtn.style.width = "auto";
+    applyBtn.style.minHeight = "24px";
+    applyBtn.style.padding = "2px 8px";
+    applyBtn.style.fontSize = "11px";
+    if (isApplied) {
+      applyBtn.style.background = "#8e3c3c";
+      applyBtn.style.borderColor = "#a64949";
+    }
+
+    applyBtn.addEventListener("click", async () => {
+      if (isApplied) {
+        if (model.audio) {
+          model.audio.pause();
+          model.audio = null;
+        }
+        this.mmdManager.removeMotion(matchedKey, model.id);
+        this.updateDeployedModelsList();
+        this.setStatusText("モーションを解除しました。");
+      } else {
+        await this.handleMotionLoadForModel(file, model.id);
+      }
+    });
+
+    item.appendChild(span);
+    item.appendChild(applyBtn);
+    return item;
   }
 
   updateDeployedModelsList() {
@@ -1048,6 +1203,7 @@ export class UIManager {
     // 現在開いている詳細メニューのIDとスクロール位置、高さを退避する
     const openMotionModels = new Set();
     const openMorphModels = new Set();
+    const openMotionGroups = new Map();
     const motionScrollTops = new Map();
     const morphScrollTops = new Map();
     const motionHeights = new Map();
@@ -1060,7 +1216,7 @@ export class UIManager {
         const detailsElements = container.querySelectorAll("details");
         detailsElements.forEach(details => {
           if (details.open) {
-            const summaryText = details.querySelector("summary")?.textContent;
+            const summaryText = details.querySelector(":scope > summary")?.textContent;
             if (summaryText === "モーション設定") {
               openMotionModels.add(mId);
               const scrollEl = details.querySelector(".motion-list-container");
@@ -1070,6 +1226,13 @@ export class UIManager {
                   motionHeights.set(mId, scrollEl.style.height);
                 }
               }
+              const openPaths = new Set();
+              details.querySelectorAll("details.motion-group").forEach(group => {
+                if (group.open && group.dataset.motionPath) {
+                  openPaths.add(group.dataset.motionPath);
+                }
+              });
+              openMotionGroups.set(mId, openPaths);
             } else if (summaryText === "モーフ設定") {
               openMorphModels.add(mId);
               const scrollEl = details.querySelector(".morph-list-container");
@@ -1298,8 +1461,7 @@ export class UIManager {
       const motionKeys = Array.from(model.motions.keys());
       if (motionKeys.length > 0) {
         const fullPath = motionKeys[motionKeys.length - 1];
-        const lastSlash = fullPath.lastIndexOf("/");
-        activeMotionNameSpan.textContent = "適用中: " + (lastSlash !== -1 ? fullPath.substring(lastSlash + 1) : fullPath);
+        activeMotionNameSpan.textContent = "適用中: " + this.formatMotionDisplayName(fullPath);
         activeMotionNameSpan.style.color = "#8fd8ff";
       } else {
         activeMotionNameSpan.textContent = "適用中: なし";
@@ -1337,10 +1499,28 @@ export class UIManager {
       motionListContainer.style.flexDirection = "column";
       motionListContainer.style.gap = "4px";
 
+      const openGroupPaths = openMotionGroups.get(model.id) || new Set();
+
       const updateLocalMotionList = (filterText = "") => {
+        motionListContainer.querySelectorAll("details.motion-group").forEach(group => {
+          const path = group.dataset.motionPath;
+          if (!path) return;
+          if (group.open) openGroupPaths.add(path);
+          else openGroupPaths.delete(path);
+        });
+
         motionListContainer.innerHTML = "";
         const lowerFilter = filterText.toLowerCase();
-        const vmdFiles = (this.assetsFiles || []).filter(f => f.name.toLowerCase().endsWith(".vmd"));
+        let vmdFiles = (this.assetsFiles || []).filter(f => {
+          if (!f.name.toLowerCase().endsWith(".vmd")) return false;
+          const path = (f.webkitRelativePath || f.name).replace(/\\/g, "/").toLowerCase();
+          // 指定フォルダ直下の motion フォルダ内のみ
+          return /(^|\/)motion\//.test(path);
+        });
+
+        if (lowerFilter) {
+          vmdFiles = vmdFiles.filter(f => f.name.toLowerCase().includes(lowerFilter));
+        }
 
         if (vmdFiles.length === 0) {
           const emptyP = document.createElement("p");
@@ -1351,69 +1531,10 @@ export class UIManager {
           return;
         }
 
-        vmdFiles.forEach(file => {
-          if (lowerFilter && !file.name.toLowerCase().includes(lowerFilter)) {
-            return;
-          }
-
-          const row = document.createElement("div");
-          row.style.display = "flex";
-          row.style.alignItems = "center";
-          row.style.justifyContent = "space-between";
-          row.style.padding = "4px 0";
-
-          const nameLabel = document.createElement("span");
-          nameLabel.textContent = file.name;
-          nameLabel.style.fontSize = "10px";
-          nameLabel.style.color = "#c7d1dc";
-          nameLabel.style.flex = "1";
-          nameLabel.style.marginRight = "8px";
-          nameLabel.style.overflow = "hidden";
-          nameLabel.style.textOverflow = "ellipsis";
-          nameLabel.style.whiteSpace = "nowrap";
-
-          const motionPath = file.webkitRelativePath || file.name;
-          const cleanMotionPath = motionPath.replace(/\\/g, "/").toLowerCase();
-          let isApplied = false;
-          let matchedKey = motionPath;
-
-          for (const key of model.motions.keys()) {
-            if (key.replace(/\\/g, "/").toLowerCase() === cleanMotionPath) {
-              isApplied = true;
-              matchedKey = key;
-              break;
-            }
-          }
-
-          const applyBtn = document.createElement("button");
-          applyBtn.textContent = isApplied ? "解除" : "適用";
-          applyBtn.className = "action-button";
-          applyBtn.style.width = "auto";
-          applyBtn.style.minHeight = "24px";
-          applyBtn.style.padding = "2px 8px";
-          applyBtn.style.fontSize = "11px";
-          if (isApplied) {
-            applyBtn.style.background = "#8e3c3c";
-            applyBtn.style.borderColor = "#a64949";
-          }
-
-          applyBtn.addEventListener("click", async () => {
-            if (isApplied) {
-              if (model.audio) {
-                model.audio.pause();
-                model.audio = null;
-              }
-              this.mmdManager.removeMotion(matchedKey, model.id);
-              this.updateDeployedModelsList();
-              this.setStatusText("モーションを解除しました。");
-            } else {
-              await this.handleMotionLoadForModel(file, model.id);
-            }
-          });
-
-          row.appendChild(nameLabel);
-          row.appendChild(applyBtn);
-          motionListContainer.appendChild(row);
+        const root = this.buildMotionTree(vmdFiles);
+        this.renderMotionGroup(root, motionListContainer, model, {
+          openGroups: Boolean(lowerFilter),
+          openPaths: openGroupPaths
         });
       };
 
