@@ -7,6 +7,7 @@ export class UIManager {
   mmdManager = null;
   xrManager = null;
   directoryHandle = null;
+  _motionApplyInFlight = false;
 
   // DOM要素の保持
   fileInput = null;
@@ -15,7 +16,6 @@ export class UIManager {
 
   colorInput = null;
   backgroundModeSelect = null;
-  shadowInput = null;
   gravityMagnitudeInput = null;
   gravityMagnitudeValue = null;
   pixelRatioSelect = null;
@@ -79,8 +79,17 @@ export class UIManager {
 
     this.colorInput = document.querySelector(".color-input");
     this.backgroundModeSelect = document.querySelector(".mode-select");
-    this.shadowInput = document.querySelector(".shadow-toggle");
-    
+    this.shadowResolutionSelect = document.querySelector(".shadow-resolution-select");
+
+    this._initGraphicsControls();
+
+    if (this.shadowResolutionSelect) {
+      const savedRes = localStorage.getItem("shadow-resolution") || "1024";
+      this.shadowResolutionSelect.value = savedRes;
+      if (this.engine && !isNaN(parseInt(savedRes, 10))) {
+        this.engine.setShadowResolution(parseInt(savedRes, 10));
+      }
+    }    
     this.gravityMagnitudeInput = document.querySelector(".gravity-magnitude-input");
     this.gravityMagnitudeValue = document.querySelector(".gravity-magnitude-value");
     this.breastPhysicsToggle = document.querySelector(".breast-physics-toggle");
@@ -93,15 +102,6 @@ export class UIManager {
       this.pixelRatioSelect.value = savedRatio;
       if (this.engine) {
         this.engine.setPixelRatio(parseFloat(savedRatio));
-      }
-    }
-
-    this.shadowResolutionSelect = document.querySelector(".shadow-resolution-select");
-    if (this.shadowResolutionSelect) {
-      const savedRes = localStorage.getItem("shadow-resolution") || "1024";
-      this.shadowResolutionSelect.value = savedRes;
-      if (this.engine) {
-        this.engine.setShadowResolution(parseInt(savedRes, 10));
       }
     }
 
@@ -515,10 +515,7 @@ export class UIManager {
       this.engine.setBackgroundMode(this.backgroundModeSelect.value);
     });
 
-    // 影
-    this.shadowInput?.addEventListener("change", () => {
-      this.engine.setShadowEnabled(this.shadowInput.checked);
-    });
+    this._setupGraphicsEvents();
 
     // 重力
     this.gravityMagnitudeInput?.addEventListener("input", () => {
@@ -925,12 +922,32 @@ export class UIManager {
   }
 
   async handleMotionLoadForModel(file, modelId) {
+    if (this._motionApplyInFlight) {
+      this.setStatusText("別のモーション適用処理中です。完了してから再試行してください。");
+      return;
+    }
+
+    // 明示指定の ID がマップに無い＝UI が古い可能性が高いので一覧を同期して再試行を促す
+    let resolvedId = modelId;
+    if (!resolvedId) {
+      resolvedId = this.mmdManager.activeModelId;
+    }
+    if (!resolvedId || !this.mmdManager.deployedModels.has(resolvedId)) {
+      this.updateDeployedModelsList();
+      const available = Array.from(this.mmdManager.deployedModels.keys()).join(", ") || "(なし)";
+      const msg = `モーション適用先のモデルが見つかりません (指定: ${modelId ?? "なし"}, 配置中: ${available})。一覧を更新しました。もう一度適用してください。`;
+      this.setStatusText(msg);
+      console.error(msg);
+      return;
+    }
+
+    this._motionApplyInFlight = true;
     this.showLoading(true, "モーションを適用中...");
     try {
       this.mmdManager.addFiles([file]);
       const motionPath = file.webkitRelativePath || file.name;
       this.setStatusText(`モーション ${file.name} を読み込み中...`);
-      await this.mmdManager.loadMotion(motionPath, modelId);
+      await this.mmdManager.loadMotion(motionPath, resolvedId);
 
       if (this.playPauseButton) this.playPauseButton.disabled = false;
       if (this.overlayPlaybackButton) this.overlayPlaybackButton.disabled = false;
@@ -949,7 +966,9 @@ export class UIManager {
     } catch (e) {
       this.setStatusText(`エラー: ${e.message}`);
       console.error(e);
+      this.updateDeployedModelsList();
     } finally {
+      this._motionApplyInFlight = false;
       this.showLoading(false);
     }
   }
@@ -994,6 +1013,11 @@ export class UIManager {
       // アセットモデルリストの更新（カメラモーションは無効化）
       this.updateAssetsModelList(fileList);
       // this.updateCameraMotionList(fileList);
+
+      // 配置済みモデルのモーション一覧も最新のアセット内容に同期する
+      if (this.mmdManager.deployedModels.size > 0) {
+        this.updateDeployedModelsList();
+      }
 
       this.setStatusText(`アセットフォルダが設定されました。ファイル数: ${fileList.length}`);
     } catch (e) {
@@ -1153,6 +1177,8 @@ export class UIManager {
     span.style.flex = "1";
     span.style.marginRight = "8px";
 
+    // クロージャ内の model オブジェクトは古くなることがあるため ID 文字列だけ保持する
+    const targetModelId = model.id;
     const motionPath = file.webkitRelativePath || file.name;
     const cleanMotionPath = motionPath.replace(/\\/g, "/").toLowerCase();
     let isApplied = false;
@@ -1178,17 +1204,25 @@ export class UIManager {
       applyBtn.style.borderColor = "#a64949";
     }
 
-    applyBtn.addEventListener("click", async () => {
+    applyBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // DOM 上の親コンテナから現行 ID を優先取得（マテリアル切替後のズレ対策）
+      const container = item.closest(".deployed-model-container");
+      const liveModelId = container?.dataset?.modelId || targetModelId;
+      const liveModel = this.mmdManager.deployedModels.get(liveModelId);
+
       if (isApplied) {
-        if (model.audio) {
-          model.audio.pause();
-          model.audio = null;
+        if (liveModel?.audio) {
+          liveModel.audio.pause();
+          liveModel.audio = null;
         }
-        this.mmdManager.removeMotion(matchedKey, model.id);
+        this.mmdManager.removeMotion(matchedKey, liveModelId);
         this.updateDeployedModelsList();
         this.setStatusText("モーションを解除しました。");
       } else {
-        await this.handleMotionLoadForModel(file, model.id);
+        await this.handleMotionLoadForModel(file, liveModelId);
       }
     });
 
@@ -1548,30 +1582,7 @@ export class UIManager {
       motionDetails.appendChild(motionContainer);
       settingsSection.appendChild(motionDetails);
 
-      // 3. 影表示 (オン/オフ)
-      const shadowField = document.createElement("label");
-      shadowField.style.display = "flex";
-      shadowField.style.alignItems = "center";
-      shadowField.style.gap = "6px";
-      shadowField.style.fontSize = "11px";
-      shadowField.style.color = "#c7d1dc";
-      shadowField.style.cursor = "pointer";
-
-      const shadowToggle = document.createElement("input");
-      shadowToggle.type = "checkbox";
-      shadowToggle.checked = model.shadowEnabled ?? true;
-      shadowToggle.addEventListener("change", () => {
-        this.mmdManager.setModelShadowEnabled(model.id, shadowToggle.checked);
-      });
-
-      const shadowSpan = document.createElement("span");
-      shadowSpan.textContent = "影を落とす";
-
-      shadowField.appendChild(shadowToggle);
-      shadowField.appendChild(shadowSpan);
-      settingsSection.appendChild(shadowField);
-
-      // 4. モーフ設定 (折りたたみ)
+      // 3. モーフ設定 (折りたたみ)
       const morphTargets = this.mmdManager.getMorphTargets(model.id);
       if (morphTargets.length > 0) {
         const morphDetails = document.createElement("details");
@@ -1727,6 +1738,375 @@ export class UIManager {
     this.showLoading(false);
   }
 
+  _getRenderingManager() {
+    return this.engine?.renderingManager || null;
+  }
+
+  _initGraphicsControls() {
+    const rm = this._getRenderingManager();
+    let saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem("webmmd-graphics-settings") || "{}");
+    } catch (_) {
+      saved = {};
+    }
+
+    this.graphicsQualitySelect = document.querySelector(".graphics-quality-select");
+    this.graphicsMaterialSelect = document.querySelector(".graphics-material-select");
+    this.graphicsKeywordPresetsToggle = document.querySelector(".graphics-keyword-presets-toggle");
+    this.graphicsExposureInput = document.querySelector(".graphics-exposure-input");
+    this.graphicsExposureValue = document.querySelector(".graphics-exposure-value");
+    this.graphicsBloomToggle = document.querySelector(".graphics-bloom-toggle");
+    this.graphicsFxaaToggle = document.querySelector(".graphics-fxaa-toggle");
+    this.graphicsDofToggle = document.querySelector(".graphics-dof-toggle");
+    this.graphicsSharpenToggle = document.querySelector(".graphics-sharpen-toggle");
+    this.graphicsSsaoToggle = document.querySelector(".graphics-ssao-toggle");
+    this.graphicsIblToggle = document.querySelector(".graphics-ibl-toggle");
+    this.graphicsIblIntensityInput = document.querySelector(".graphics-ibl-intensity-input");
+    this.graphicsIblIntensityValue = document.querySelector(".graphics-ibl-intensity-value");
+    this.graphicsKeyGizmoToggle = document.querySelector(".graphics-key-gizmo-toggle");
+    this.graphicsKeyAzimuthInput = document.querySelector(".graphics-key-azimuth-input");
+    this.graphicsKeyAzimuthValue = document.querySelector(".graphics-key-azimuth-value");
+    this.graphicsKeyElevationInput = document.querySelector(".graphics-key-elevation-input");
+    this.graphicsKeyElevationValue = document.querySelector(".graphics-key-elevation-value");
+    this.graphicsKeyIntensityInput = document.querySelector(".graphics-key-intensity-input");
+    this.graphicsKeyIntensityValue = document.querySelector(".graphics-key-intensity-value");
+    this.graphicsShadowDarknessInput = document.querySelector(".graphics-shadow-darkness-input");
+    this.graphicsShadowDarknessValue = document.querySelector(".graphics-shadow-darkness-value");
+
+    if (this.graphicsQualitySelect) {
+      this.graphicsQualitySelect.value = saved.qualityPreset || "auto";
+      rm?.setQualityPreset(this.graphicsQualitySelect.value);
+    }
+    if (this.graphicsMaterialSelect) {
+      this.graphicsMaterialSelect.value = saved.materialMode || "standard";
+    }
+    if (this.graphicsKeywordPresetsToggle) {
+      this.graphicsKeywordPresetsToggle.checked = !!saved.keywordPresetsEnabled;
+      this.mmdManager.keywordPresetsEnabled = this.graphicsKeywordPresetsToggle.checked;
+      if (this.mmdManager._pbrMaterialBuilder) {
+        this.mmdManager._pbrMaterialBuilder.keywordPresetsEnabled = this.graphicsKeywordPresetsToggle.checked;
+      }
+    }
+    if (this.graphicsExposureInput) {
+      const exp = saved.exposure ?? rm?.settings?.exposure ?? 1.0;
+      this.graphicsExposureInput.value = exp;
+      if (this.graphicsExposureValue) this.graphicsExposureValue.textContent = Number(exp).toFixed(2);
+      rm?.setExposure(parseFloat(exp));
+    }
+    if (this.graphicsBloomToggle) {
+      this.graphicsBloomToggle.checked = !!saved.bloom;
+      rm?.setBloomEnabled(this.graphicsBloomToggle.checked);
+    }
+    if (this.graphicsFxaaToggle) {
+      this.graphicsFxaaToggle.checked = saved.fxaa !== false;
+      rm?.setFxaaEnabled(this.graphicsFxaaToggle.checked);
+    }
+    if (this.graphicsDofToggle) {
+      this.graphicsDofToggle.checked = !!saved.dof;
+      rm?.setDofEnabled(this.graphicsDofToggle.checked);
+    }
+    if (this.graphicsSharpenToggle) {
+      this.graphicsSharpenToggle.checked = !!saved.sharpen;
+      rm?.setSharpenEnabled(this.graphicsSharpenToggle.checked);
+    }
+    if (this.graphicsSsaoToggle) {
+      this.graphicsSsaoToggle.checked = !!saved.ssao;
+      rm?.setSsaoEnabled(this.graphicsSsaoToggle.checked);
+    }
+    if (this.graphicsIblToggle) {
+      this.graphicsIblToggle.checked = saved.ibl !== false;
+      rm?.setIblEnabled(this.graphicsIblToggle.checked);
+    }
+    if (this.graphicsIblIntensityInput) {
+      const ibl = saved.iblIntensity ?? 0.6;
+      this.graphicsIblIntensityInput.value = ibl;
+      if (this.graphicsIblIntensityValue) this.graphicsIblIntensityValue.textContent = Number(ibl).toFixed(2);
+      rm?.setIblIntensity(parseFloat(ibl));
+    }
+
+    const s = rm?.settings || {};
+    if (this.graphicsKeyGizmoToggle) {
+      this.graphicsKeyGizmoToggle.checked = !!saved.keyLightGizmo;
+      rm?.setKeyLightGizmoVisible(this.graphicsKeyGizmoToggle.checked);
+    }
+    if (this.graphicsKeyAzimuthInput) {
+      const az = saved.keyAzimuth ?? s.keyAzimuth ?? 130;
+      this.graphicsKeyAzimuthInput.value = az;
+      if (this.graphicsKeyAzimuthValue) this.graphicsKeyAzimuthValue.textContent = String(Math.round(az));
+    }
+    if (this.graphicsKeyElevationInput) {
+      const el = saved.keyElevation ?? s.keyElevation ?? 55;
+      this.graphicsKeyElevationInput.value = el;
+      if (this.graphicsKeyElevationValue) this.graphicsKeyElevationValue.textContent = String(Math.round(el));
+    }
+    if (this.graphicsKeyAzimuthInput || this.graphicsKeyElevationInput) {
+      rm?.setKeyLightDirection(
+        parseFloat(this.graphicsKeyAzimuthInput?.value ?? 130),
+        parseFloat(this.graphicsKeyElevationInput?.value ?? 55)
+      );
+    }
+    if (this.graphicsKeyIntensityInput) {
+      const mul = saved.keyIntensityMul ?? s.keyIntensityMul ?? 1.0;
+      this.graphicsKeyIntensityInput.value = mul;
+      if (this.graphicsKeyIntensityValue) this.graphicsKeyIntensityValue.textContent = Number(mul).toFixed(2);
+      rm?.setKeyIntensityMul(parseFloat(mul));
+    }
+    if (this.graphicsShadowDarknessInput) {
+      const mode = saved.materialMode || "standard";
+      const modeDefault = mode === "pbr" ? 0.75 : 0.35;
+      const darkness = saved.shadowDarkness ?? s.shadowDarkness ?? modeDefault;
+      this.graphicsShadowDarknessInput.value = darkness;
+      if (this.graphicsShadowDarknessValue) {
+        this.graphicsShadowDarknessValue.textContent = Number(darkness).toFixed(2);
+      }
+      rm?.setShadowDarkness(parseFloat(darkness));
+    }
+  }
+
+  _setupGraphicsEvents() {
+    const rm = () => this._getRenderingManager();
+
+    this.graphicsQualitySelect?.addEventListener("change", () => {
+      rm()?.setQualityPreset(this.graphicsQualitySelect.value);
+      this._persistGraphicsSettings();
+      this.setStatusText(`品質プリセット: ${this.graphicsQualitySelect.value}`);
+    });
+
+    this.graphicsMaterialSelect?.addEventListener("change", async () => {
+      const mode = this.graphicsMaterialSelect.value;
+      this.showLoading(true, mode === "pbr" ? "PBR へ切替中..." : "Standard へ切替中...");
+      try {
+        await this.mmdManager.switchMaterialMode(mode);
+        // 再ロードで modelId が変わるため、配置リストを必ず同期する
+        this.updateDeployedModelsList();
+        // モード切替で影の濃さ・SSAO 既定が変わるので UI を同期
+        this._syncShadowDarknessUiFromEngine();
+        const rmAfter = this._getRenderingManager();
+        if (this.graphicsSsaoToggle && typeof rmAfter?.settings?.ssao === "boolean") {
+          this.graphicsSsaoToggle.checked = rmAfter.settings.ssao;
+        }
+        if (this.graphicsIblIntensityInput && typeof rmAfter?.settings?.iblIntensity === "number") {
+          this.graphicsIblIntensityInput.value = rmAfter.settings.iblIntensity;
+          if (this.graphicsIblIntensityValue) {
+            this.graphicsIblIntensityValue.textContent = Number(rmAfter.settings.iblIntensity).toFixed(2);
+          }
+        }
+        this._persistGraphicsSettings();
+        this.setStatusText(`マテリアル: ${mode}`);
+      } catch (e) {
+        console.error(e);
+        this.setStatusText(`マテリアル切替エラー: ${e.message}`);
+        this.graphicsMaterialSelect.value = this.mmdManager.materialMode;
+        this.updateDeployedModelsList();
+      } finally {
+        this.showLoading(false);
+      }
+    });
+
+    this.graphicsKeywordPresetsToggle?.addEventListener("change", () => {
+      const enabled = this.graphicsKeywordPresetsToggle.checked;
+      this.mmdManager.keywordPresetsEnabled = enabled;
+      if (this.mmdManager._pbrMaterialBuilder) {
+        this.mmdManager._pbrMaterialBuilder.keywordPresetsEnabled = enabled;
+      }
+      this._persistGraphicsSettings();
+      this.setStatusText(`キーワード質感プリセット: ${enabled ? "ON" : "OFF"}（次回PBRロードから反映）`);
+    });
+
+    this.graphicsExposureInput?.addEventListener("input", () => {
+      const v = parseFloat(this.graphicsExposureInput.value);
+      if (this.graphicsExposureValue) this.graphicsExposureValue.textContent = v.toFixed(2);
+      rm()?.setExposure(v);
+      this._persistGraphicsSettings();
+    });
+
+    this.graphicsBloomToggle?.addEventListener("change", () => {
+      rm()?.setBloomEnabled(this.graphicsBloomToggle.checked);
+      this._persistGraphicsSettings();
+    });
+    this.graphicsFxaaToggle?.addEventListener("change", () => {
+      rm()?.setFxaaEnabled(this.graphicsFxaaToggle.checked);
+      this._persistGraphicsSettings();
+    });
+    this.graphicsDofToggle?.addEventListener("change", () => {
+      rm()?.setDofEnabled(this.graphicsDofToggle.checked);
+      this._persistGraphicsSettings();
+    });
+    this.graphicsSharpenToggle?.addEventListener("change", () => {
+      rm()?.setSharpenEnabled(this.graphicsSharpenToggle.checked);
+      this._persistGraphicsSettings();
+    });
+    this.graphicsSsaoToggle?.addEventListener("change", () => {
+      rm()?.setSsaoEnabled(this.graphicsSsaoToggle.checked);
+      this._persistGraphicsSettings();
+    });
+    this.graphicsIblToggle?.addEventListener("change", () => {
+      rm()?.setIblEnabled(this.graphicsIblToggle.checked);
+      this._persistGraphicsSettings();
+    });
+    this.graphicsIblIntensityInput?.addEventListener("input", () => {
+      const v = parseFloat(this.graphicsIblIntensityInput.value);
+      if (this.graphicsIblIntensityValue) this.graphicsIblIntensityValue.textContent = v.toFixed(2);
+      rm()?.setIblIntensity(v);
+      this._persistGraphicsSettings();
+    });
+
+    this.graphicsKeyGizmoToggle?.addEventListener("change", () => {
+      rm()?.setKeyLightGizmoVisible(this.graphicsKeyGizmoToggle.checked);
+      this._persistGraphicsSettings();
+    });
+
+    const syncKeyDir = () => {
+      const az = parseFloat(this.graphicsKeyAzimuthInput?.value ?? 130);
+      const el = parseFloat(this.graphicsKeyElevationInput?.value ?? 55);
+      if (this.graphicsKeyAzimuthValue) this.graphicsKeyAzimuthValue.textContent = String(Math.round(az));
+      if (this.graphicsKeyElevationValue) this.graphicsKeyElevationValue.textContent = String(Math.round(el));
+      rm()?.setKeyLightDirection(az, el);
+      this._persistGraphicsSettings();
+    };
+    this.graphicsKeyAzimuthInput?.addEventListener("input", syncKeyDir);
+    this.graphicsKeyElevationInput?.addEventListener("input", syncKeyDir);
+
+    this.graphicsKeyIntensityInput?.addEventListener("input", () => {
+      const v = parseFloat(this.graphicsKeyIntensityInput.value);
+      if (this.graphicsKeyIntensityValue) this.graphicsKeyIntensityValue.textContent = v.toFixed(2);
+      rm()?.setKeyIntensityMul(v);
+      this._persistGraphicsSettings();
+    });
+
+    this.graphicsShadowDarknessInput?.addEventListener("input", () => {
+      const v = parseFloat(this.graphicsShadowDarknessInput.value);
+      if (this.graphicsShadowDarknessValue) this.graphicsShadowDarknessValue.textContent = v.toFixed(2);
+      rm()?.setShadowDarkness(v);
+      this._persistGraphicsSettings();
+    });
+  }
+
+  _syncShadowDarknessUiFromEngine() {
+    const rm = this._getRenderingManager();
+    const darkness = rm?.settings?.shadowDarkness;
+    if (typeof darkness !== "number" || !this.graphicsShadowDarknessInput) return;
+    this.graphicsShadowDarknessInput.value = darkness;
+    if (this.graphicsShadowDarknessValue) {
+      this.graphicsShadowDarknessValue.textContent = darkness.toFixed(2);
+    }
+  }
+
+  _collectGraphicsSettings() {
+    const rm = this._getRenderingManager();
+    return {
+      qualityPreset: this.graphicsQualitySelect?.value || rm?.qualityPreset || "auto",
+      materialMode: this.graphicsMaterialSelect?.value || this.mmdManager.materialMode || "standard",
+      keywordPresetsEnabled: !!this.graphicsKeywordPresetsToggle?.checked,
+      exposure: this.graphicsExposureInput ? parseFloat(this.graphicsExposureInput.value) : 1.0,
+      bloom: !!this.graphicsBloomToggle?.checked,
+      fxaa: this.graphicsFxaaToggle ? this.graphicsFxaaToggle.checked : true,
+      dof: !!this.graphicsDofToggle?.checked,
+      sharpen: !!this.graphicsSharpenToggle?.checked,
+      ssao: !!this.graphicsSsaoToggle?.checked,
+      ibl: this.graphicsIblToggle ? this.graphicsIblToggle.checked : true,
+      iblIntensity: this.graphicsIblIntensityInput ? parseFloat(this.graphicsIblIntensityInput.value) : 0.6,
+      keyLightGizmo: !!this.graphicsKeyGizmoToggle?.checked,
+      keyAzimuth: this.graphicsKeyAzimuthInput ? parseFloat(this.graphicsKeyAzimuthInput.value) : 130,
+      keyElevation: this.graphicsKeyElevationInput ? parseFloat(this.graphicsKeyElevationInput.value) : 55,
+      keyIntensityMul: this.graphicsKeyIntensityInput ? parseFloat(this.graphicsKeyIntensityInput.value) : 1.0,
+      shadowDarkness: this.graphicsShadowDarknessInput
+        ? parseFloat(this.graphicsShadowDarknessInput.value)
+        : (rm?.settings?.shadowDarkness ?? 0.35)
+    };
+  }
+
+  _persistGraphicsSettings() {
+    try {
+      localStorage.setItem("webmmd-graphics-settings", JSON.stringify(this._collectGraphicsSettings()));
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  async _applyGraphicsSettings(graphics) {
+    if (!graphics) return;
+    const rm = this._getRenderingManager();
+
+    if (graphics.qualityPreset && this.graphicsQualitySelect) {
+      this.graphicsQualitySelect.value = graphics.qualityPreset;
+      rm?.setQualityPreset(graphics.qualityPreset);
+    }
+    if (typeof graphics.exposure === "number") {
+      if (this.graphicsExposureInput) this.graphicsExposureInput.value = graphics.exposure;
+      if (this.graphicsExposureValue) this.graphicsExposureValue.textContent = graphics.exposure.toFixed(2);
+      rm?.setExposure(graphics.exposure);
+    }
+    if (typeof graphics.bloom === "boolean") {
+      if (this.graphicsBloomToggle) this.graphicsBloomToggle.checked = graphics.bloom;
+      rm?.setBloomEnabled(graphics.bloom);
+    }
+    if (typeof graphics.fxaa === "boolean") {
+      if (this.graphicsFxaaToggle) this.graphicsFxaaToggle.checked = graphics.fxaa;
+      rm?.setFxaaEnabled(graphics.fxaa);
+    }
+    if (typeof graphics.dof === "boolean") {
+      if (this.graphicsDofToggle) this.graphicsDofToggle.checked = graphics.dof;
+      rm?.setDofEnabled(graphics.dof);
+    }
+    if (typeof graphics.sharpen === "boolean") {
+      if (this.graphicsSharpenToggle) this.graphicsSharpenToggle.checked = graphics.sharpen;
+      rm?.setSharpenEnabled(graphics.sharpen);
+    }
+    if (typeof graphics.ssao === "boolean") {
+      if (this.graphicsSsaoToggle) this.graphicsSsaoToggle.checked = graphics.ssao;
+      rm?.setSsaoEnabled(graphics.ssao);
+    }
+    if (typeof graphics.ibl === "boolean") {
+      if (this.graphicsIblToggle) this.graphicsIblToggle.checked = graphics.ibl;
+      rm?.setIblEnabled(graphics.ibl);
+    }
+    if (typeof graphics.iblIntensity === "number") {
+      if (this.graphicsIblIntensityInput) this.graphicsIblIntensityInput.value = graphics.iblIntensity;
+      if (this.graphicsIblIntensityValue) this.graphicsIblIntensityValue.textContent = graphics.iblIntensity.toFixed(2);
+      rm?.setIblIntensity(graphics.iblIntensity);
+    }
+    if (typeof graphics.keyLightGizmo === "boolean") {
+      if (this.graphicsKeyGizmoToggle) this.graphicsKeyGizmoToggle.checked = graphics.keyLightGizmo;
+      rm?.setKeyLightGizmoVisible(graphics.keyLightGizmo);
+    }
+    if (typeof graphics.keyAzimuth === "number" || typeof graphics.keyElevation === "number") {
+      const az = graphics.keyAzimuth ?? parseFloat(this.graphicsKeyAzimuthInput?.value ?? 130);
+      const el = graphics.keyElevation ?? parseFloat(this.graphicsKeyElevationInput?.value ?? 55);
+      if (this.graphicsKeyAzimuthInput) this.graphicsKeyAzimuthInput.value = az;
+      if (this.graphicsKeyAzimuthValue) this.graphicsKeyAzimuthValue.textContent = String(Math.round(az));
+      if (this.graphicsKeyElevationInput) this.graphicsKeyElevationInput.value = el;
+      if (this.graphicsKeyElevationValue) this.graphicsKeyElevationValue.textContent = String(Math.round(el));
+      rm?.setKeyLightDirection(az, el);
+    }
+    if (typeof graphics.keyIntensityMul === "number") {
+      if (this.graphicsKeyIntensityInput) this.graphicsKeyIntensityInput.value = graphics.keyIntensityMul;
+      if (this.graphicsKeyIntensityValue) this.graphicsKeyIntensityValue.textContent = graphics.keyIntensityMul.toFixed(2);
+      rm?.setKeyIntensityMul(graphics.keyIntensityMul);
+    }
+    if (typeof graphics.keywordPresetsEnabled === "boolean") {
+      if (this.graphicsKeywordPresetsToggle) this.graphicsKeywordPresetsToggle.checked = graphics.keywordPresetsEnabled;
+      this.mmdManager.keywordPresetsEnabled = graphics.keywordPresetsEnabled;
+      if (this.mmdManager._pbrMaterialBuilder) {
+        this.mmdManager._pbrMaterialBuilder.keywordPresetsEnabled = graphics.keywordPresetsEnabled;
+      }
+    }
+    if (graphics.materialMode && graphics.materialMode !== this.mmdManager.materialMode) {
+      if (this.graphicsMaterialSelect) this.graphicsMaterialSelect.value = graphics.materialMode;
+      await this.mmdManager.switchMaterialMode(graphics.materialMode);
+    }
+    // マテリアル切替が darkness をモード既定に戻すため、保存値は最後に適用する
+    if (typeof graphics.shadowDarkness === "number") {
+      if (this.graphicsShadowDarknessInput) this.graphicsShadowDarknessInput.value = graphics.shadowDarkness;
+      if (this.graphicsShadowDarknessValue) {
+        this.graphicsShadowDarknessValue.textContent = graphics.shadowDarkness.toFixed(2);
+      }
+      rm?.setShadowDarkness(graphics.shadowDarkness);
+    }
+    this._persistGraphicsSettings();
+  }
+
   syncMotionSelection() {
     // assets-motion elements have been removed. This is a stub method.
   }
@@ -1759,7 +2139,6 @@ export class UIManager {
         zipName: model.zipName || null,
         position: [model.mesh.position.x, model.mesh.position.y, model.mesh.position.z],
         rotation: [rx, ry, rz],
-        shadowEnabled: model.shadowEnabled ?? true,
         motions: Array.from(model.motions.keys()),
         morphs: morphs
       });
@@ -1772,10 +2151,10 @@ export class UIManager {
       settings: {
         backgroundColor: this.colorInput ? this.colorInput.value : "#0b1118",
         backgroundMode: this.backgroundModeSelect ? this.backgroundModeSelect.value : "grid",
-        shadowEnabled: this.shadowInput ? this.shadowInput.checked : true,
         gravity: this.gravityMagnitudeInput ? parseFloat(this.gravityMagnitudeInput.value) : 9.8,
         breastPhysicsEnabled: this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true,
-        breastPhysicsInertia: this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0
+        breastPhysicsInertia: this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0,
+        graphics: this._collectGraphicsSettings()
       }
     };
 
@@ -1798,10 +2177,6 @@ export class UIManager {
           this.backgroundModeSelect.value = settings.backgroundMode;
           this.engine.setBackgroundMode(settings.backgroundMode);
         }
-        if (settings.shadowEnabled !== undefined && this.shadowInput) {
-          this.shadowInput.checked = settings.shadowEnabled;
-          this.engine.setShadowEnabled(settings.shadowEnabled);
-        }
         if (settings.gravity !== undefined && this.gravityMagnitudeInput) {
           this.gravityMagnitudeInput.value = settings.gravity;
           if (this.gravityMagnitudeValue) {
@@ -1823,6 +2198,9 @@ export class UIManager {
         const bEnabled = this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true;
         const bInertia = this.breastPhysicsInertiaInput ? parseFloat(this.breastPhysicsInertiaInput.value) : 1.0;
         this.mmdManager.updateBreastPhysicsSettings(bEnabled, bInertia);
+        if (settings.graphics) {
+          await this._applyGraphicsSettings(settings.graphics);
+        }
       }
 
       // 2. 配置モデルのクリア
@@ -1869,9 +2247,6 @@ export class UIManager {
           }
           if (modelData.rotation) {
             this.mmdManager.setModelRotation(id, modelData.rotation[0], modelData.rotation[1], modelData.rotation[2]);
-          }
-          if (modelData.shadowEnabled !== undefined) {
-            this.mmdManager.setModelShadowEnabled(id, modelData.shadowEnabled);
           }
 
           // モーフの適用

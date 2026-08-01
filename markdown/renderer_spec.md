@@ -1,277 +1,212 @@
 # レンダラ周りの仕様
 
-Babylon.js 描画基盤、MMD 表示、WebXR、および UI から触れる描画設定の仕様まとめ。
-実装の正は `src/engine/` および関連ソース。本ドキュメントは現状コードの整理である。
+Babylon.js 描画基盤、MMD 表示、WebXR、グラフィックス設定の仕様まとめ。
+実装の正は `src/engine/` および関連ソース。
 
 ---
 
 ## 1. 全体構成
 
-**スタック:** `@babylonjs/core` / `@babylonjs/havok` / `@babylonjs/materials` / `babylon-mmd` / Vite + PWA
+**スタック:** `@babylonjs/core@9.18` / `@babylonjs/havok` / `@babylonjs/materials` / `babylon-mmd@1.3` / Vite + PWA
 
 ### 起動フロー
 
 ```
 index.html (#renderCanvas)
   └─ src/main.js
-       ├─ TextureAlphaChecker モンキーパッチ（Babylon LOD Map 対策）
        ├─ BabylonEngine.initialize(canvas)
-       ├─ MmdManager(scene, camera, physicsPlugin)
-       ├─ XrManager(scene, ground).initialize(#overlay-vr-button)
-       └─ UIManager(engine, mmd, xr).restoreSession()
+       │    ├─ SdefInjector.OverrideEngineCreateEffect(engine)
+       │    ├─ Havok / ArcRotateCamera / Ground
+       │    └─ RenderingManager.initialize()
+       ├─ MmdManager(scene, camera, physics, renderingManager)
+       ├─ XrManager → setXrMode(true/false)
+       └─ UIManager → graphics パネル + localStorage
 ```
 
-| クラス | ファイル | 役割 |
-|---|---|---|
-| `BabylonEngine` | `src/engine/BabylonEngine.js` | Engine / Scene / Camera / Lights / Shadow / Ground / Havok / FPS 制限 / リサイズ / 背景 |
-| `MmdManager` | `src/engine/MmdManager.js` | PMX / VMD ロード、`MmdRuntime`、物理最適化、音声同期、モーフ |
-| `XrManager` | `src/engine/XrManager.js` | WebXR 入退場、スケール、パススルー、スティック移動 |
-| `UIManager` | `src/ui/UIManager.js` | DOM バインドと描画設定のエンジン同期 |
+| クラス | 役割 |
+|---|---|
+| `BabylonEngine` | Engine / Scene / Camera / Ground / Havok。ライト・影は RenderingManager へ委譲 |
+| `RenderingManager` | ambient / 3点照明 / 影 / DRP / SSAO / IBL / 品質プリセット / XR モード |
+| `MmdManager` | babylon-mmd 1.3 ローダ・アニメ・物理・Standard/PBR 切替 |
+| `MmdPbrMaterialBuilder` | PBR 構築（sphere/toon 無効、キーワード質感オプション） |
+| `XrManager` | WebXR + RenderingManager.setXrMode |
+| `UIManager` | settings-graphics パネル連携 |
 
 ---
 
-## 2. BabylonEngine
+## 2. RenderingManager
 
-### 2.1 初期化パラメータ
+### 2.1 照明
 
-| 項目 | 値 |
+| ライト | 内容 |
 |---|---|
-| Engine オプション | `preserveDrawingBuffer: true`, `stencil: true` |
-| `scene.clearColor` | `Color4(0.04, 0.07, 0.09, 1.0)`（≈ `#0b1118`） |
-| Havok | WASM を Vite `?url` で同梱（CDN 不使用） |
-| `HavokPlugin` | `useDeltaForWorldStep = false` |
-| 重力初期値 | `(0, -9.8 * 12.5, 0)`（MMD スケール 12.5 倍） |
-| 物理タイムステップ | `setTimeStep(1/60)` + `setSubTimeStep(1000/60)`（描画 FPS 非依存の 60Hz 固定） |
-| Camera | `ArcRotateCamera` — α=`-π/2`, β=`π/2-0.1`, radius=`30`, target=`(0,10,0)` |
-| Camera 制限 | `wheelPrecision=15`, `pinchPrecision=200`, radius `1`〜`200` |
-| HemisphericLight | intensity `0.5` |
-| DirectionalLight | dir `(-1,-2,1)`, pos `(10,30,-10)`, intensity `0.7` |
-| ShadowGenerator | size `1024`, Blur Exponential + Kernel Blur (`blurKernel=32`) |
-| Ground | `100×100`, `receiveShadows=true` |
+| ambientColor | Standard: `(0.5, 0.5, 0.5)` / PBR: `(0.1, 0.1, 0.12)`（モード切替時に自動調整） |
+| HemisphericLight | Standard: specular `(0,0,0)` / PBR: specular `(0.15, 0.15, 0.15)` |
+| key (`dirLight`) | 主光源・影キャスタ。方位角 / 高度で方向・位置を制御 |
+| fill | 影なし |
+| rim | 中品質以上。XR 中は OFF |
+| キーライトギズモ | `KeyLightGizmo`（Unity 風）。シーン中央 `(0,10,0)` に向きだけ表示。`setKeyLightGizmoVisible` で切替 |
 
-### 2.2 床マテリアル
+### 2.2 影
 
-| モード | マテリアル | 備考 |
-|---|---|---|
-| `grid`（初期） | `GridMaterial` | majorUnitFrequency=`5`, opacity=`0.8` |
-| `solid` | `StandardMaterial` | diffuse は背景色と連動、specular 黒 |
-
-### 2.3 公開 API
-
-| メソッド | 挙動 |
+| 品質 | 方式 |
 |---|---|
-| `setFpsLimit(limit)` | `customAnimationFrameRequester` で間引き。`null` で解除 |
-| `setGravity(magnitude)` | `(0, -magnitude * 12.5, 0)` |
-| `setBackgroundColor(hex)` | `clearColor` と solid 床色を更新（α=1） |
-| `setBackgroundMode("grid"\|"solid")` | 床マテリアル切替 |
-| `setShadowEnabled(bool)` | `dirLight.shadowEnabled` |
-| `setShadowResolution(size)` | shadowMap の resize |
-| `setPixelRatio(ratio)` | `setHardwareScalingLevel(1/ratio)` |
-| `restoreAfterXr()` | XR 終了後のカメラ・FPS requester・`engine.resize()` 復元 |
-| `togglePhysicsViewer()` | `P` キー。Havok `PhysicsViewer` の表示切替 |
-| `dispose()` | リスナー解除 + engine dispose |
+| low〜medium | `ShadowGenerator` + PCF |
+| high〜ultra | `CascadedShadowGenerator`（`numCascades=2`, `autoCalcDepthBounds=false`） |
 
-### 2.4 リサイズ
+- bias / normalBias は MMD スケール向けに調整
+- 半透明マテリアルはキャスタ除外
+- `receiveShadows` をモデル配下で有効化（モデルは cast + receive = 自己影あり）
+- `settings.shadowDarkness`（0〜1）: Standard 既定 `0.35` / PBR 既定 `0.75`
+- `setShadowDarkness(v)` で即時反映。モード切替時はモード既定へ戻す
+- UI: グラフィックスパネル「影の濃さ」スライダー（`webmmd-graphics-settings` に永続化）
+- 影の ON/OFF UI（表示セクション・モデル別「影を落とす」）は廃止。モデルはロード時に常時キャスト
+- PBR 時は品質プリセットによらず影を常時 ON（`setShadowEnabled(false)` も無視）
+- キーライトは `autoUpdateExtends=false` + キャスタ適合 `shadowFrustumSize`（MMD の巨大 AABB 対策）
+- `forceBackFacesOnly` / 低めの bias・normalBias でセルフシャドウを確保
+- PBR の IBL: スライダー値をそのまま適用（下限 1.0 強制は廃止）。マテリアル側 `environmentIntensity≈0.55`
 
-- `window.resize` → `engine.resize()`
-- フルスクリーン切替（標準 / webkit）→ `requestAnimationFrame` 後に `resize()`
+### 2.3 ポストFX
+
+`DefaultRenderingPipeline`:
+
+| 効果 | 既定 |
+|---|---|
+| Bloom | OFF |
+| FXAA | ON |
+| MSAA | プリセット依存 |
+| DoF | OFF |
+| シャープネス | OFF（high で ON / ultra で ON） |
+
+`SSAO2RenderingPipeline`: デスクトップ + medium以上 + PBR 時。medium 以上で既定 ON。未使用時は dispose。
+
+### 2.4 IBL
+
+1. `public/env/studio.env` または `default.env` を `CubeTexture.CreateFromPrefilteredData` で読込
+2. 無ければ 128px `RawCubeTexture` で方向性のある屋内照明風フォールバック生成（mipmap 有効）
+3. ReflectionProbe を environmentTexture に直接は付けない
+4. Vite PWA `globPatterns` に `env` を含む
+
+### 2.5 品質プリセット
+
+`auto` / `low` / `medium` / `high` / `ultra`
+
+- auto: 端末スコア（cores / deviceMemory / mobile）+ 実測 FPS で切替
+- high: SSAO / シャープネス 既定 ON（PBR + デスクトップ環境向け）
+- XR 入場時: SSAO / Bloom / DoF / シャープネス / CSM 強制 OFF（`setXrMode(true)`）
+
+### 2.6 露出
+
+`scene.imageProcessingConfiguration.exposure` と、存在する `MmdStandardMaterial.cameraExposure` を同期。
+
+### 2.7 PBR 照明最適化
+
+- モード切替時（`setMaterialMode`）に以下を自動調整:
+  - `scene.ambientColor`: Standard `(0.5, 0.5, 0.5)` → PBR `(0.1, 0.1, 0.12)`
+  - `hemiLight.specular`: Standard `(0,0,0)` → PBR `(0.15, 0.15, 0.15)`
+  - `contrast`: Standard 既定値 → PBR 切替時に +0.15（最低 1.1）。Standard 復帰時に復元
+  - `shadowDarkness`: Standard `0.35` → PBR `0.75`
+- PBR ライト強度（`LIGHT_LEVELS_PBR`）: hemi `0.32` / key `2.2` / fill `0.1` / rim `0.28`  
+  （キー主体。IBL/fill/hemi で影が埋まらないようにする）
 
 ---
 
-## 3. 描画ループと計測
+## 3. BabylonEngine（互換ラッパ）
+
+| メソッド | 委譲先 |
+|---|---|
+| `setShadowEnabled` | `renderingManager.setShadowEnabled` |
+| `setShadowResolution` | `renderingManager.setShadowResolution` |
+| `setShadowDarkness` | `renderingManager.setShadowDarkness` |
+| `dirLight` / `hemiLight` / `shadowGenerator` | getter で RenderingManager を参照 |
+
+その他（重力・背景・FPS制限・XR 復元・PhysicsViewer）は従来どおり。
+
+---
+
+## 4. MMD（babylon-mmd 1.3）
+
+### 4.1 ロード
+
+```js
+RegisterPmxLoader();
+RegisterMmdRuntimeModelAnimation();
+RegisterMmdRuntimeCameraAnimation();
+
+LoadAssetContainerAsync(url, scene, {
+  pluginExtension: ".pmx",
+  pluginOptions: { mmdmodel: { materialBuilder } }
+});
+
+createMmdModel(mesh, {
+  materialProxyConstructor: MmdStandardMaterialProxy, // PBR 時は null
+  trimMetadata: false,
+  buildPhysics: true
+});
+```
+
+### 4.2 アニメ / カメラ
+
+- モデル: `createRuntimeAnimation` → `setRuntimeAnimation(handle|null)` → `destroyRuntimeAnimation`
+- カメラ: `new MmdCamera` + `mmdRuntime.addAnimatable`（`mmdRuntime.camera` は削除済み）
+- `motions` Map: `name → { animation, handle }`
+
+### 4.3 物理
+
+- `rigidBodyStates[i]`: `0` = kinematic（アニメ追従）, `1` = dynamic
+- 再初期化: `mmdRuntime.initializeMmdModelPhysics(model)`
+- 胸物理: メタデータ最適化 + `mesh.getChildTransformNodes` 上の `physicsBody` へ damping / gravityFactor
+- グローバル無効: 全 `rigidBodyStates` を 0 + 物理タイムステップ 0
+
+### 4.4 Standard / PBR 切替
+
+- YAML 往復禁止。専用スナップショット（位置・回転・モーション名・モーフ・再生時刻）
+- 旧 AssetContainer / メッシュ / マテリアルを明示 dispose 後に再ロード
+
+### 4.5 PBR 既知制限
+
+- sphere / toon 無効（v1）
+- マテリアルモーフ非対応（UI に明記）
+- キーワード質感プリセットはオプション（既定 OFF）
+
+---
+
+## 5. UI（settings-graphics）
+
+| コントロール | 動作 |
+|---|---|
+| 品質プリセット | `setQualityPreset` |
+| マテリアル | `switchMaterialMode`（再ロード） |
+| 露出 / Bloom / FXAA / DoF / シャープ / SSAO / IBL | RenderingManager |
+| キーライト方位・高度・強度 / 位置表示 | `setKeyLightDirection` / `setKeyIntensityMul` / `setKeyLightGizmoVisible` |
+| キーワード質感 | 次回 PBR ロードから反映 |
+
+永続化キー: `localStorage["webmmd-graphics-settings"]`  
+シーン YAML の `settings.graphics` にも往復。
+
+---
+
+## 6. 関連ファイル
 
 ```
-engine.runRenderLoop(() => scene.render())
-
-onBeforeRenderObservable      → update 計測開始
-onBeforeDrawPhaseObservable  → updateTime 確定 / draw 計測開始
-onAfterRenderObservable      → drawTime 確定
-```
-
-| 指標 | 取得元 |
-|---|---|
-| FPS | `engine.getFps()`（なければ自前） |
-| Update / Draw | `babylonEngine.updateTime` / `drawTime`（ms） |
-| MEM | `performance.memory.usedJSHeapSize`（Chrome 系のみ） |
-
-リソースモニタは `UIManager.startResourceMonitor` が約 1 秒間隔でオーバーレイ更新する。
-
-**その他の毎フレーム処理:**
-
-- `MmdManager` — ループ再生・音声同期
-- `XrManager.updateXrMovement()` — `IN_XR` 時のみ
-
----
-
-## 4. WebXR（XrManager）
-
-### 4.1 初期化
-
-```javascript
-scene.createDefaultXRExperienceAsync({
-  floorMeshes: [ground],
-  uiOptions: { disableDefaultUI: true },
-  disableTeleportation: true,
-  optionalFeatures: ["xr-legacy-passthrough", "background-removal"]
-})
-```
-
-UI は `#overlay-vr-button`。非対応環境ではボタンを disabled にする。
-
-### 4.2 入退場
-
-| 状態 | 処理 |
-|---|---|
-| **Enter (`IN_XR`)** | `_saveDesktopState()`（カメラ α/β/radius/target、clearColor、ground）→ `worldScalingFactor = 12.5` → パススルー適用 |
-| **Exit (`NOT_IN_XR`)** | `worldScalingFactor = 1.0` → `_restoreDesktopState()` |
-
-| セッション | 条件 |
-|---|---|
-| `immersive-ar` | パススルー ON |
-| `immersive-vr` | パススルー OFF |
-| referenceSpace | `"local-floor"` |
-
-### 4.3 退出時復元（`_restoreDesktopState`）
-
-トリガ: `onStateChanged(NOT_IN_XR)` および `sessionManager.onXRSessionEnded`（スマホのブラウザ終了ボタン含む）。  
-Babylon の session end がオブザーバより後に `customAnimationFrameRequester` を null にするため、`setTimeout` で遅延復元する。
-
-1. clearColor を保存値で α=1 強制復元（なければ UI 色 or `#0b1118`）
-2. ground の enabled 復元
-3. ArcRotateCamera の α/β/radius/target 復元（Babylon が XR カメラ位置で上書きするのを打ち消す）
-4. `babylonEngine.restoreAfterXr()`（activeCamera / FPS requester / 複数回 resize / レンダーループ再起動）
-5. `.viewer.xr-active` を除去
-
-### 4.4 移動定数
-
-| 定数 | 値 |
-|---|---|
-| `moveSpeed` | `0.03`（× `worldScalingFactor`） |
-| `verticalSpeed` | `0.015`（同上） |
-| ヨー回転 | `0.03` rad/frame |
-| デッドゾーン | スティック絶対値 `> 0.1` |
-
-| 操作 | 内容 |
-|---|---|
-| 左スティック | 水平移動 |
-| X / Y ボタン | 下降 / 上昇 |
-| 右スティック X | ヨー回転 |
-
-パススルーは `WebXRFeatureName.XR_LEGACY_PASSTHROUGH`。状態は `localStorage["vr-passthrough-enabled"]`。
-
----
-
-## 5. MMD（MmdManager）
-
-### 5.1 ランタイム
-
-- `MmdPhysics(scene)` + `MmdRuntime(scene, mmdPhysics)` → `register(scene)`
-- アセット解決: `fileMap`（相対パス → Blob URL）+ `FileTools.PreprocessUrl`
-- 欠損テクスチャ: 1×1 透明 PNG のダミー Blob URL
-
-### 5.2 モデルロード `loadModel`
-
-1. `SceneLoader.ImportMeshAsync`（`.pmx`）
-2. 初期位置 X = `deployedModels.size * 6.0`
-3. `dirLight` の ShadowGenerator に `addShadowCaster`
-4. 物理メタデータ最適化（つま先 IK、体幹 FollowBone など）
-5. `createMmdModel` → rest pose → `initializePhysics`
-6. ID: `"model_" + counter`
-
-### 5.3 モーション / カメラ
-
-| API | 内容 |
-|---|---|
-| `loadMotion` | VMD 適用、同名 `.wav`/`.mp3` を `Audio` で紐付け（`loop=true`） |
-| `loadCameraMotion` | `mmdRuntime.camera` にランタイムアニメーション設定 |
-| `play` / `pause` / `reset` / `setLoopEnabled` | 再生制御 |
-| `setModelPosition` / `setModelRotation` / `setModelShadowEnabled` | モデル単位設定 |
-| `getMorphTargets` / `setMorphValue` | モーフ |
-
-### 5.4 音声同期しきい値
-
-| 条件 | 動作 |
-|---|---|
-| `\|diff\| > 2.0` | 強制シーク |
-| `diff > 0.05` | `playbackRate = 1.02` |
-| `diff < -0.05` | `playbackRate = 0.98` |
-| `\|diff\| ≤ 0.02` | `1.0` |
-| `readyState < 2` | 同期スキップ |
-
-### 5.5 物理まわり
-
-| API | 内容 |
-|---|---|
-| `updateBreastPhysicsSettings(enabled, inertia)` | 胸物理。ダンピング／重力係数を `inertia`（0〜10）で調整。衝突マスクは常に 0 |
-| `setPhysicsDisableGlobally` | `mmdPhysics` / 各モデルの物理 OFF、`setTimeStep(0)` + `setSubTimeStep(0)`、復帰時は 60Hz を再適用 |
-
----
-
-## 6. Canvas / ビューア UI
-
-| 要素 | 内容 |
-|---|---|
-| Canvas | `#renderCanvas`（`width/height: 100%`, `touch-action: none`） |
-| レイアウト | `#app` > `.app-shell`（sidebar 280px + `.viewer`） |
-| テーマ色 | `#0b1118`（meta / PWA / 背景デフォルト） |
-| Vite base | `/webmmd/` |
-
-ビューア周辺:
-
-- `.viewer-loading` — ロード表示
-- `.viewer-overlay` — フルスクリーン / 再生 / リセット / VR
-- `#resource-monitor-overlay` — FPS / Draw / Update / MEM
-- フルスクリーン時は sidebar 非表示（`body.pseudo-fullscreen` フォールバックあり）
-- `.viewer.xr-active` — XR 時の背景透明化用（CSS）
-
----
-
-## 7. UI から触れる描画設定
-
-| UI | 呼び出し | 既定 / 永続化 |
-|---|---|---|
-| `.color-input` | `setBackgroundColor` | `#0b1118` |
-| `.mode-select` | `setBackgroundMode` (`grid` / `solid`) | grid |
-| `.shadow-toggle` | `setShadowEnabled` | HTML 上 unchecked |
-| `.gravity-magnitude-input` | `setGravity` | `9.8`（実効 `-9.8*12.5`）、range 0.1–50 |
-| `.breast-physics-*` | `updateBreastPhysicsSettings` | ON, 60Hz, inertia 1.0 |
-| `.pixel-ratio-select` | `setPixelRatio` | 1 / 1.5 / 2（`pixel-ratio`、default `1`） |
-| `.shadow-resolution-select` | `setShadowResolution` | 256 / 512 / **1024**（`shadow-resolution`、default `1024`） |
-| `.vr-passthrough-toggle` | `setPassthroughEnabled` | `vr-passthrough-enabled` |
-| `.fps-limit-toggle` + `.fps-limit-input` | `setFpsLimit` | `fps-limit-enabled` / `fps-limit-value`（default 60） |
-| `.physics-disable-toggle` | `setPhysicsDisableGlobally` | `physics-disable-globally` |
-| `.resource-monitor-toggle` | monitor start/stop | `resource-monitor-enabled` |
-| `.motion-loop-toggle` | `setLoopEnabled` | `motion-loop-enabled` |
-| モデル「影を落とす」 | `setModelShadowEnabled` | モデル単位 |
-| `#overlay-vr-button` | enter / exit XR | — |
-
-シーン YAML 復元時も背景色・影・重力・胸物理などを再適用する。
-
----
-
-## 8. 関連ファイル
-
-```
-src/
-├── main.js
-├── style.css
-├── engine/
-│   ├── BabylonEngine.js
-│   ├── MmdManager.js
-│   └── XrManager.js
-├── ui/
-│   └── UIManager.js
-└── utils/
-    ├── db.js
-    └── zipLoader.js
+src/engine/BabylonEngine.js
+src/engine/RenderingManager.js
+src/engine/KeyLightGizmo.js
+src/engine/MmdManager.js
+src/engine/materials/MmdPbrMaterialBuilder.js
+src/engine/XrManager.js
+src/ui/UIManager.js
+src/main.js
 index.html
+public/env/README.txt
 vite.config.js
 ```
 
 ---
 
-## 9. 既知の注意点
+## 7. 既知の注意点
 
-- XR 終了時は Babylon 側が canvas サイズ・カメラ・`customAnimationFrameRequester` を変える。アプリ側は `_restoreDesktopState` + `restoreAfterXr` でデスクトップ表示を戻す。
-- `PROJECT_OVERVIEW.md` に記載のある「ボーン追跡でカメラ `setTarget`」は現行 `MmdManager` には未実装（`setTarget` は XR 復元時のみ）。
-- `#overlay-gyro-recalibrate-button` は HTML にあるが JS 未配線。
+- XR 終了時は `_restoreDesktopState` + `restoreAfterXr` でデスクトップ表示を戻す
+- `#overlay-gyro-recalibrate-button` は未配線
+- IBL フォールバックは 128px mipmap 有効の方向性あるキューブマップ（prefiltered ではないため `studio.env` には劣る）
+- 旧 API（`ImportMeshAsync` / `addAnimation` / `physicsEnabled` / `dirLight._shadowGenerator` / TextureAlphaChecker パッチ）は削除済み

@@ -8,10 +8,12 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'inline',
       devOptions: {
-        enabled: true
+        enabled: true,
+        suppressWarnings: true
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,env}'],
+        globIgnores: ['sw.js'],
         maximumFileSizeToCacheInBytes: 25 * 1024 * 1024, // Babylon.js & Havok WASM用に上限を引き上げ (25MB)
       },
       manifest: {

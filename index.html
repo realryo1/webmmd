@@ -99,9 +99,96 @@
                     <option value="solid">単色</option>
                   </select>
                 </label>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="panel" data-section-id="settings-graphics">
+          <div class="panel-header">
+            <h3 class="settings-group__title">グラフィックス</h3>
+            <span class="panel-toggle-icon">▼</span>
+          </div>
+          <div class="panel-content">
+            <div class="panel-content-inner">
+              <div class="settings-group">
+                <label class="field">
+                  <span>品質プリセット</span>
+                  <select class="graphics-quality-select">
+                    <option value="auto">自動</option>
+                    <option value="low">低</option>
+                    <option value="medium">中</option>
+                    <option value="high">高</option>
+                    <option value="ultra">最高</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>マテリアル</span>
+                  <select class="graphics-material-select">
+                    <option value="standard">Standard（トゥーン互換）</option>
+                    <option value="pbr">PBR</option>
+                  </select>
+                </label>
+                <p class="motion-empty graphics-pbr-note" style="margin:0.25em 0 0.5em;font-size:11px;line-height:1.4;">
+                  PBR モードではマテリアルモーフ・sphere/toon マップは非対応です。切替時にモデルを再ロードします。
+                </p>
                 <label class="checkbox-field field--toggle">
-                  <input class="shadow-toggle" type="checkbox">
-                  <span>影</span>
+                  <input class="graphics-keyword-presets-toggle" type="checkbox">
+                  <span>PBR キーワード質感プリセット</span>
+                </label>
+                <hr style="border:0; border-top:1px solid #333; margin:0.8em 0;">
+                <label class="field">
+                  <span>露出 <span class="graphics-exposure-value">1.0</span></span>
+                  <input class="graphics-exposure-input" type="range" min="0.4" max="2.0" step="0.05" value="1.0">
+                </label>
+                <label class="checkbox-field field--toggle">
+                  <input class="graphics-bloom-toggle" type="checkbox">
+                  <span>Bloom</span>
+                </label>
+                <label class="checkbox-field field--toggle">
+                  <input class="graphics-fxaa-toggle" type="checkbox" checked>
+                  <span>FXAA</span>
+                </label>
+                <label class="checkbox-field field--toggle">
+                  <input class="graphics-dof-toggle" type="checkbox">
+                  <span>被写界深度 (DoF)</span>
+                </label>
+                <label class="checkbox-field field--toggle">
+                  <input class="graphics-sharpen-toggle" type="checkbox">
+                  <span>シャープネス</span>
+                </label>
+                <label class="checkbox-field field--toggle">
+                  <input class="graphics-ssao-toggle" type="checkbox">
+                  <span>SSAO（PBR・中品質以上）</span>
+                </label>
+                <label class="checkbox-field field--toggle">
+                  <input class="graphics-ibl-toggle" type="checkbox" checked>
+                  <span>IBL（環境光）</span>
+                </label>
+                <label class="field">
+                  <span>IBL 強度 <span class="graphics-ibl-intensity-value">0.6</span></span>
+                  <input class="graphics-ibl-intensity-input" type="range" min="0" max="2" step="0.05" value="0.6">
+                </label>
+                <hr style="border:0; border-top:1px solid #333; margin:0.8em 0;">
+                <p class="motion-empty" style="margin:0 0 0.4em;font-size:11px;line-height:1.4;">キーライト（Directional・影）</p>
+                <label class="checkbox-field field--toggle">
+                  <input class="graphics-key-gizmo-toggle" type="checkbox">
+                  <span>キーライト向きを表示</span>
+                </label>
+                <label class="field">
+                  <span>方位角 <span class="graphics-key-azimuth-value">130</span>°</span>
+                  <input class="graphics-key-azimuth-input" type="range" min="0" max="360" step="1" value="130">
+                </label>
+                <label class="field">
+                  <span>高度 <span class="graphics-key-elevation-value">55</span>°</span>
+                  <input class="graphics-key-elevation-input" type="range" min="5" max="85" step="1" value="55">
+                </label>
+                <label class="field">
+                  <span>キー強度倍率 <span class="graphics-key-intensity-value">1.00</span></span>
+                  <input class="graphics-key-intensity-input" type="range" min="0" max="2.5" step="0.05" value="1.0">
+                </label>
+                <label class="field">
+                  <span>影の濃さ <span class="graphics-shadow-darkness-value">0.75</span></span>
+                  <input class="graphics-shadow-darkness-input" type="range" min="0" max="1" step="0.05" value="0.75">
                 </label>
               </div>
             </div>

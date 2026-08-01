@@ -1,34 +1,45 @@
-import { 
-  Engine, 
-  Scene, 
-  Vector3, 
-  ArcRotateCamera, 
-  HemisphericLight, 
-  DirectionalLight, 
-  ShadowGenerator, 
-  Color4, 
-  MeshBuilder, 
+import {
+  Engine,
+  Scene,
+  Vector3,
+  ArcRotateCamera,
+  Color4,
+  MeshBuilder,
   HavokPlugin,
   StandardMaterial,
   Color3,
   PhysicsViewer
 } from "@babylonjs/core";
 import { GridMaterial } from "@babylonjs/materials";
+import { ShadowOnlyMaterial } from "@babylonjs/materials/shadowOnly/shadowOnlyMaterial";
 import HavokPhysics from "@babylonjs/havok";
 import havokWasmUrl from "@babylonjs/havok/lib/esm/HavokPhysics.wasm?url";
+import { SdefInjector } from "babylon-mmd/esm/Loader/sdefInjector";
+import { RenderingManager } from "./RenderingManager";
 
 export class BabylonEngine {
   engine = null;
   scene = null;
   camera = null;
-  dirLight = null;
-  hemiLight = null;
-  shadowGenerator = null;
+  renderingManager = null;
   physicsPlugin = null;
-  
+
+  // RenderingManager 経由の互換プロパティ
+  get dirLight() {
+    return this.renderingManager?.keyLight ?? null;
+  }
+  get hemiLight() {
+    return this.renderingManager?.hemiLight ?? null;
+  }
+  get shadowGenerator() {
+    return this.renderingManager?.shadowGenerator ?? null;
+  }
+
   ground = null;
+  shadowGround = null;
   gridMaterial = null;
   solidMaterial = null;
+  shadowOnlyMaterial = null;
   fpsLimit = null;
   updateTime = 0;
   drawTime = 0;
@@ -65,7 +76,7 @@ export class BabylonEngine {
         };
         this.engine.customAnimationFrameRequester.requestID = requestAnimationFrame(loop);
       },
-      cancelAnimationFrame: (id) => {
+      cancelAnimationFrame: () => {
         if (this.engine.customAnimationFrameRequester && this.engine.customAnimationFrameRequester.requestID) {
           cancelAnimationFrame(this.engine.customAnimationFrameRequester.requestID);
         }
@@ -73,34 +84,32 @@ export class BabylonEngine {
     };
   }
 
-  // Physics debugging
   _physicsViewer = null;
   _showPhysicsViewer = false;
 
   async initialize(canvas) {
-    this.engine = new Engine(canvas, true, { 
-      preserveDrawingBuffer: true, 
-      stencil: true 
+    this.engine = new Engine(canvas, true, {
+      preserveDrawingBuffer: true,
+      stencil: true
     });
 
-    this.scene = new Scene(this.engine);
-    this.scene.clearColor = new Color4(0.04, 0.07, 0.09, 1.0); // #0b1118 に近いダークカラー
+    // SDEF: Engine 生成直後、ShadowGenerator より前
+    SdefInjector.OverrideEngineCreateEffect(this.engine);
 
-    // 物理エンジンの初期化 (Havok)
+    this.scene = new Scene(this.engine);
+    this.scene.clearColor = new Color4(0.04, 0.07, 0.09, 1.0);
+
     const havokInstance = await HavokPhysics({
       locateFile: () => havokWasmUrl
     });
-    // useDeltaForWorldStep = false: 各物理ステップは固定 dt で進める
-    // setSubTimeStep により描画 FPS（制限含む）ではなく実時間で 60Hz 分ステップする
     this.physicsPlugin = new HavokPlugin(false, havokInstance);
-    this.scene.enablePhysics(new Vector3(0, -9.8 * 12.5, 0), this.physicsPlugin); // MMDスケールを考慮
+    this.scene.enablePhysics(new Vector3(0, -9.8 * 12.5, 0), this.physicsPlugin);
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine) {
       physicsEngine.setTimeStep(1 / 60);
       physicsEngine.setSubTimeStep(1000 / 60);
     }
 
-    // カメラの初期化
     this.camera = new ArcRotateCamera(
       "camera",
       -Math.PI / 2,
@@ -111,27 +120,25 @@ export class BabylonEngine {
     );
     this.camera.attachControl(canvas, true);
     this.camera.wheelPrecision = 15;
-    this.camera.pinchPrecision = 200; // ピンチズーム感度（大きいほど鈍感）
+    this.camera.pinchPrecision = 200;
     this.camera.lowerRadiusLimit = 1;
     this.camera.upperRadiusLimit = 200;
 
-    // ライトの初期化
-    this.hemiLight = new HemisphericLight("hemiLight", new Vector3(0, 1, 0), this.scene);
-    this.hemiLight.intensity = 0.5;
+    // 描画中枢
+    this.renderingManager = new RenderingManager(this.engine, this.scene, this.camera);
+    this.renderingManager.initialize();
 
-    this.dirLight = new DirectionalLight("dirLight", new Vector3(-1, -2, 1), this.scene);
-    this.dirLight.position = new Vector3(10, 30, -10);
-    this.dirLight.intensity = 0.7;
-
-    // 影の初期化
-    this.shadowGenerator = new ShadowGenerator(1024, this.dirLight);
-    this.shadowGenerator.useBlurExponentialShadowMap = true;
-    this.shadowGenerator.useKernelBlur = true;
-    this.shadowGenerator.blurKernel = 32;
-
-    // グリッド床の初期化
     this.ground = MeshBuilder.CreateGround("ground", { width: 100, height: 100 }, this.scene);
     this.ground.receiveShadows = true;
+
+    // GridMaterial は影の受けが弱いため、影専用の半透明受け面を重ねる
+    this.shadowGround = MeshBuilder.CreateGround("shadowGround", { width: 100, height: 100 }, this.scene);
+    this.shadowGround.position.y = 0.02;
+    this.shadowGround.receiveShadows = true;
+    this.shadowGround.isPickable = false;
+    this.shadowOnlyMaterial = new ShadowOnlyMaterial("shadowOnly", this.scene);
+    this.shadowOnlyMaterial.activeLight = this.dirLight;
+    this.shadowGround.material = this.shadowOnlyMaterial;
 
     this.gridMaterial = new GridMaterial("gridMaterial", this.scene);
     this.gridMaterial.majorUnitFrequency = 5;
@@ -146,7 +153,6 @@ export class BabylonEngine {
 
     this.ground.material = this.gridMaterial;
 
-    // パフォーマンス計測用のイベントフック
     let updateStart = 0;
     let drawStart = 0;
     this.scene.onBeforeRenderObservable.add(() => {
@@ -161,7 +167,6 @@ export class BabylonEngine {
       this.drawTime = performance.now() - drawStart;
     });
 
-    // 描画ループの開始
     this.engine.runRenderLoop(() => {
       this.scene.render();
     });
@@ -175,17 +180,12 @@ export class BabylonEngine {
   }
 
   handleResize = () => {
-    if (this.engine) {
-      this.engine.resize();
-    }
+    if (this.engine) this.engine.resize();
   };
 
-  // フルスクリーン切替後はCSSレイアウト完了を待ってリサイズ
   handleFullscreenChange = () => {
     requestAnimationFrame(() => {
-      if (this.engine) {
-        this.engine.resize();
-      }
+      if (this.engine) this.engine.resize();
     });
   };
 
@@ -205,27 +205,19 @@ export class BabylonEngine {
     this._showPhysicsViewer = !this._showPhysicsViewer;
 
     if (this._showPhysicsViewer) {
-      this.scene.meshes.forEach(mesh => {
-        if (mesh.physicsBody) {
-          this._physicsViewer.showBody(mesh.physicsBody);
-        }
+      this.scene.meshes.forEach((mesh) => {
+        if (mesh.physicsBody) this._physicsViewer.showBody(mesh.physicsBody);
       });
-      this.scene.transformNodes.forEach(node => {
-        if (node.physicsBody) {
-          this._physicsViewer.showBody(node.physicsBody);
-        }
+      this.scene.transformNodes.forEach((node) => {
+        if (node.physicsBody) this._physicsViewer.showBody(node.physicsBody);
       });
       console.log("PhysicsViewer enabled");
     } else {
-      this.scene.meshes.forEach(mesh => {
-        if (mesh.physicsBody) {
-          this._physicsViewer.hideBody(mesh.physicsBody);
-        }
+      this.scene.meshes.forEach((mesh) => {
+        if (mesh.physicsBody) this._physicsViewer.hideBody(mesh.physicsBody);
       });
-      this.scene.transformNodes.forEach(node => {
-        if (node.physicsBody) {
-          this._physicsViewer.hideBody(node.physicsBody);
-        }
+      this.scene.transformNodes.forEach((node) => {
+        if (node.physicsBody) this._physicsViewer.hideBody(node.physicsBody);
       });
       this._physicsViewer.dispose();
       this._physicsViewer = null;
@@ -235,7 +227,6 @@ export class BabylonEngine {
 
   setGravity(magnitude) {
     if (this.scene) {
-      // MMDのスケール倍率（約12.5倍）を掛けて設定
       this.scene.getPhysicsEngine().setGravity(new Vector3(0, -magnitude * 12.5, 0));
     }
   }
@@ -250,9 +241,6 @@ export class BabylonEngine {
     }
   }
 
-  // WebXR 終了後にデスクトップ描画状態を復元する
-  // スマホのブラウザ終了ボタンでは、Babylon の session end 処理が
-  // オブザーバより後に customAnimationFrameRequester を null にするため、遅延再適用が必要
   restoreAfterXr() {
     if (!this.engine || !this.scene) return;
 
@@ -264,7 +252,6 @@ export class BabylonEngine {
       }
     }
 
-    // XR 中に Babylon が canvas バッファをヘッドセット解像度へ変えるため CSS を明示
     if (canvas) {
       canvas.style.width = "100%";
       canvas.style.height = "100%";
@@ -276,7 +263,6 @@ export class BabylonEngine {
       if (!this.engine) return;
       this.updateAnimationFrameRequester();
       this.engine.resize();
-      // session end 直後にループが止まる端末対策
       if (typeof this.engine._renderLoop === "function") {
         this.engine._renderLoop();
       }
@@ -284,7 +270,6 @@ export class BabylonEngine {
 
     syncLayoutAndLoop();
 
-    // 没入モード解除後のレイアウト確定を待つ（スマホは特に遅延が大きい）
     const delays = [0, 50, 150, 300, 600, 1000];
     for (const ms of delays) {
       setTimeout(syncLayoutAndLoop, ms);
@@ -299,20 +284,16 @@ export class BabylonEngine {
     if (!this.ground) return;
     if (mode === "grid") {
       this.ground.material = this.gridMaterial;
+      if (this.shadowGround) this.shadowGround.setEnabled(true);
     } else {
       this.ground.material = this.solidMaterial;
+      // ソリッド床は StandardMaterial 自身が影を受けるので専用面は不要
+      if (this.shadowGround) this.shadowGround.setEnabled(false);
     }
   }
 
   setShadowEnabled(enabled) {
-    if (this.shadowGenerator) {
-      // 既存の影の描画マップを設定・無効化
-      if (enabled) {
-        this.dirLight.shadowEnabled = true;
-      } else {
-        this.dirLight.shadowEnabled = false;
-      }
-    }
+    this.renderingManager?.setShadowEnabled(enabled);
   }
 
   setPixelRatio(ratio) {
@@ -322,12 +303,11 @@ export class BabylonEngine {
   }
 
   setShadowResolution(size) {
-    if (this.shadowGenerator) {
-      const shadowMap = this.shadowGenerator.getShadowMap();
-      if (shadowMap && typeof shadowMap.resize === "function") {
-        shadowMap.resize(size);
-      }
-    }
+    this.renderingManager?.setShadowResolution(size);
+  }
+
+  setShadowDarkness(v) {
+    this.renderingManager?.setShadowDarkness(v);
   }
 
   dispose() {
@@ -339,6 +319,8 @@ export class BabylonEngine {
       this._physicsViewer.dispose();
       this._physicsViewer = null;
     }
+    this.renderingManager?.dispose();
+    this.renderingManager = null;
     if (this.engine) {
       this.engine.dispose();
     }

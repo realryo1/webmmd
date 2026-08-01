@@ -73,6 +73,8 @@ export class XrManager {
           this._saveDesktopState();
           this._desktopRestorePending = true;
 
+          this.babylonEngine?.renderingManager?.setXrMode(true);
+
           // worldScalingFactor を 12.5 に設定し、ジャイロトラッキングやIPDも含めて等身大化
           if (this.xrHelper.baseExperience.sessionManager) {
             this.xrHelper.baseExperience.sessionManager.worldScalingFactor = 12.5;
@@ -102,6 +104,8 @@ export class XrManager {
           if (this.xrHelper.baseExperience.sessionManager) {
             this.xrHelper.baseExperience.sessionManager.worldScalingFactor = 1.0;
           }
+
+          this.babylonEngine?.renderingManager?.setXrMode(false);
 
           // Babylon の session end 後処理より後ろで復元する
           this._scheduleDesktopRestore();

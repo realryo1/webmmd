@@ -1,11 +1,21 @@
-import { SceneLoader, FileTools, Vector3, Quaternion } from "@babylonjs/core";
-import { MmdRuntime, MmdPhysics, VmdLoader, PmxLoader } from "babylon-mmd";
+import { Vector3, Quaternion } from "@babylonjs/core/Maths/math.vector";
+import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader";
+import { FileToolsOptions } from "@babylonjs/core/Misc/fileTools";
+import { RegisterPmxLoader } from "babylon-mmd/esm/Loader/pmxLoader.pure";
+import { RegisterMmdRuntimeModelAnimation } from "babylon-mmd/esm/Runtime/Animation/mmdRuntimeModelAnimation.pure";
+import { RegisterMmdRuntimeCameraAnimation } from "babylon-mmd/esm/Runtime/Animation/mmdRuntimeCameraAnimation.pure";
+import { MmdStandardMaterialBuilder } from "babylon-mmd/esm/Loader/mmdStandardMaterialBuilder";
+import { MmdStandardMaterialProxy } from "babylon-mmd/esm/Runtime/mmdStandardMaterialProxy";
+import { MmdRuntime } from "babylon-mmd/esm/Runtime/mmdRuntime";
+import { MmdPhysics } from "babylon-mmd/esm/Runtime/Physics/mmdPhysics";
+import { MmdCamera } from "babylon-mmd/esm/Runtime/mmdCamera.pure";
+import { VmdLoader } from "babylon-mmd/esm/Loader/vmdLoader";
+import { MmdPbrMaterialBuilder } from "./materials/MmdPbrMaterialBuilder";
 
-// babylon-mmd 共有 MaterialBuilder のトゥーンエッジ（アウトライン）適用を無効化
-const sharedMmdMaterialBuilder = new PmxLoader().materialBuilder;
-if (sharedMmdMaterialBuilder) {
-  sharedMmdMaterialBuilder.loadOutlineRenderingProperties = () => {};
-}
+// babylon-mmd 1.3 ツリーシェイク対応API: 各種ローダー/ランタイムアニメーションの副作用登録
+RegisterPmxLoader();
+RegisterMmdRuntimeModelAnimation();
+RegisterMmdRuntimeCameraAnimation();
 
 // 1x1透明PNGのBase64データからBlob URLを生成するヘルパー
 const DUMMY_PNG_DATA = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -28,30 +38,52 @@ function getDummyBlobUrl() {
   return dummyBlobUrl;
 }
 
+// 除外する不要な物理剛体のキーワード
+const IGNORE_KEYWORDS = ["下着", "パンツ", "インナー", "アンダーウェア", "pants", "underwear", "inner"];
+
+// 体幹・基幹ボーンのキーワード
+const BODY_BASE_KEYWORDS = ["センター", "グルーブ", "腰", "骨盤", "下半身", "上半身", "首", "頭", "親", "体", "center", "groove", "waist", "pelvis", "lower body", "upper body", "neck", "head", "root", "spine", "hip", "torso", "body"];
+
+// 揺れもののキーワード
+const HAIR_KEYWORDS = ["髪", "ヘア", "hair", "ツインテ", "ポニテ", "前髪", "横髪", "後髪", "アホ毛", "サイド", "バック", "テール"];
+const BREAST_KEYWORDS = ["胸", "おっぱい", "乳", "bust", "breast", "ちち"];
+const SKIRT_KEYWORDS = ["スカート", "skirt", "裾", "フリル", "プリーツ"];
+const ACCESSORY_KEYWORDS = ["リボン", "ribbon", "袖", "sleeve", "紐", "ひも", "帯", "飾り", "羽", "ウイング", "wing", "しっぽ", "尻尾", "tail"];
+
 export class MmdManager {
   scene = null;
-  camera = null;
+  camera = null; // デスクトップ用 ArcRotateCamera
   physicsPlugin = null;
   mmdPhysics = null;
-  
+  renderingManager = null;
+
   mmdRuntime = null;
-  deployedModels = new Map(); // id -> { id, mesh, mmdModel, name, motions: Map, shadowEnabled: bool, audio: Audio, userMorphOverrides: Map }
+  mmdCamera = null; // MMDカメラモーション再生用
+
+  deployedModels = new Map(); // id -> { id, mesh, mmdModel, name, zipName, motions: Map, audio, userMorphOverrides, assetContainer, runtimeAnimationHandles }
   activeModelId = null;
   _modelIdCounter = 0;
 
   activeCameraMotion = null;
-  fileMap = new Map(); // relativePath -> blobUrl
+  cameraHandle = null;
+  fileMap = new Map(); // relativePath -> { blobUrl, file }
+
+  materialMode = "standard"; // "standard" | "pbr"
+  keywordPresetsEnabled = false;
+  _standardMaterialBuilder = null;
+  _pbrMaterialBuilder = null;
 
   breastPhysicsEnabled = true;
   breastPhysicsInertia = 1.0;
   physicsDisableGlobally = false;
   loopEnabled = false;
   boneLogEnabled = false;
-  
-  constructor(scene, camera, physicsPlugin) {
+
+  constructor(scene, camera, physicsPlugin, renderingManager = null) {
     this.scene = scene;
     this.camera = camera;
     this.physicsPlugin = physicsPlugin;
+    this.renderingManager = renderingManager;
 
     // MmdRuntimeの初期化
     const mmdPhysics = new MmdPhysics(scene);
@@ -59,9 +91,18 @@ export class MmdManager {
     this.mmdRuntime = new MmdRuntime(scene, mmdPhysics);
     this.mmdRuntime.register(scene);
 
+    // MMDカメラモーション再生用のMmdCameraを生成しランタイムに登録
+    this.mmdCamera = new MmdCamera("mmdCamera", new Vector3(0, 10, 0), scene);
+    this.mmdRuntime.addAnimatable(this.mmdCamera);
+
+    // マテリアルビルダー（共有インスタンス）を準備
+    this._standardMaterialBuilder = new MmdStandardMaterialBuilder();
+    // トゥーンエッジ（アウトライン）の適用を無効化
+    this._standardMaterialBuilder.loadOutlineRenderingProperties = () => {};
+    this._pbrMaterialBuilder = new MmdPbrMaterialBuilder();
+
     // 描画 FPS 非依存の 60Hz 固定ステップを適用
     this._applyPhysicsTimestep();
-
 
     // 音声同期用オブザーバーの登録
     this.scene.onBeforeRenderObservable.add(() => {
@@ -144,12 +185,12 @@ export class MmdManager {
     for (const file of files) {
       const path = file.webkitRelativePath || file.path || file.name;
       const cleanPath = path.replace(/\\/g, "/").toLowerCase();
-      
+
       // 既存のURLがあれば解放
       if (this.fileMap.has(cleanPath)) {
         URL.revokeObjectURL(this.fileMap.get(cleanPath).blobUrl);
       }
-      
+
       const blob = file instanceof File ? file : file.blob;
       const blobUrl = URL.createObjectURL(blob);
       this.fileMap.set(cleanPath, { blobUrl, file });
@@ -165,16 +206,16 @@ export class MmdManager {
       // URIデコードに失敗した場合はそのまま
     }
     cleanUrl = cleanUrl.replace(/\\/g, "/").toLowerCase();
-    
+
     // "blob:https://..." や "http://..." のスキーマを除去
     cleanUrl = cleanUrl.replace(/^blob:/, "").replace(/^https?:\/\/[^\/]+/, "");
-    
+
     // パスをセグメントに分割し、空要素や "." を除去する
     const urlSegments = cleanUrl.split("/").filter(s => s && s !== ".");
     if (urlSegments.length === 0) return null;
 
     const urlFileName = urlSegments[urlSegments.length - 1];
-    
+
     const getBaseName = (name) => {
       const idx = name.lastIndexOf('.');
       return idx === -1 ? name : name.substring(0, idx);
@@ -196,7 +237,7 @@ export class MmdManager {
 
       const keyFileName = keySegments[keySegments.length - 1];
       const keyBaseName = getBaseName(keyFileName);
-      
+
       const isExact = (keyFileName === urlFileName);
       const isBaseMatch = (keyBaseName === urlBaseName);
 
@@ -273,17 +314,23 @@ export class MmdManager {
   }
 
   // ロード処理中のリクエストURLをフックしてBlob URLを解決するラッパー
+  // babylon-mmd 1.3 では FileTools.PreprocessUrl ではなく FileToolsOptions.PreprocessUrl を差し替える
   async wrapLoading(action) {
-    const original = FileTools.PreprocessUrl;
-    FileTools.PreprocessUrl = (url) => {
+    const original = FileToolsOptions.PreprocessUrl;
+    FileToolsOptions.PreprocessUrl = (url) => {
       const resolved = this.resolvePath(url);
       return resolved ? resolved : original(url);
     };
     try {
       return await action();
     } finally {
-      FileTools.PreprocessUrl = original;
+      FileToolsOptions.PreprocessUrl = original;
     }
+  }
+
+  // materialMode に応じた共有マテリアルビルダーを返す
+  _getMaterialBuilder() {
+    return this.materialMode === "pbr" ? this._pbrMaterialBuilder : this._standardMaterialBuilder;
   }
 
   async loadModel(pmxFileName, zipName = null) {
@@ -305,12 +352,22 @@ export class MmdManager {
 
     // ReferenceFileResolver による解決をバイパスし、PreprocessUrl フックを用いてテクスチャ等を完全に解決する
     const pmxBlobUrl = entry.blobUrl;
-    const mmdMesh = await this.wrapLoading(async () => {
-      return await SceneLoader.ImportMeshAsync("", "", pmxBlobUrl, this.scene, null, ".pmx");
+    const materialBuilder = this._getMaterialBuilder();
+
+    const container = await this.wrapLoading(async () => {
+      return await LoadAssetContainerAsync(pmxBlobUrl, this.scene, {
+        pluginExtension: ".pmx",
+        pluginOptions: {
+          mmdmodel: {
+            materialBuilder
+          }
+        }
+      });
     });
 
-    const mesh = mmdMesh.meshes[0];
-    
+    container.addAllToScene();
+    const mesh = container.meshes[0];
+
     // 複数追加時に重ならないよう、モデル数に応じて初期位置をX軸方向にずらす (例: 6.0 ずつ)
     const initialX = this.deployedModels.size * 6.0;
     mesh.position.set(initialX, 0, 0);
@@ -321,10 +378,10 @@ export class MmdManager {
     // トゥーンエッジ（アウトライン）を全マテリアルで無効化
     this._disableModelOutlines(mesh);
 
-    // シャドウジェネレーターにメッシュを追加
-    const shadowGenerator = this.scene.lights.find(l => l.name === "dirLight")?._shadowGenerator;
-    if (shadowGenerator) {
-      shadowGenerator.addShadowCaster(mesh, true);
+    // 描画マネージャ経由でシャドウキャスタ・受影を設定
+    if (this.renderingManager) {
+      this.renderingManager.addShadowCaster(mesh, true);
+      this.renderingManager.enableReceiveShadows(mesh);
     }
 
     // 物理パラメータの自動最適化 (揺れもの、除外フィルター等)
@@ -352,13 +409,12 @@ export class MmdManager {
     if (mesh.metadata && mesh.metadata.rigidBodies && mesh.metadata.bones) {
       const rigidBodiesMetadata = mesh.metadata.rigidBodies;
       const bonesMetadata = mesh.metadata.bones;
-      const bodyBaseKeywords = ["センター", "グルーブ", "腰", "骨盤", "下半身", "上半身", "首", "頭", "親", "体", "center", "groove", "waist", "pelvis", "lower body", "upper body", "neck", "head", "root", "spine", "hip", "torso", "body"];
 
       rigidBodiesMetadata.forEach(rb => {
         const bone = bonesMetadata[rb.boneIndex];
         const boneName = bone ? (bone.name || "") : "";
         const targetName = ((rb.name || "") + "_" + boneName).toLowerCase();
-        const isBodyBase = bodyBaseKeywords.some(kw => targetName.includes(kw));
+        const isBodyBase = BODY_BASE_KEYWORDS.some(kw => targetName.includes(kw));
 
         if (isBodyBase) {
           rb.physicsMode = 0; // FollowBone
@@ -367,17 +423,23 @@ export class MmdManager {
       });
     }
 
-    // MmdRuntimeにモデルを登録 (物理初期化バグを防ぐため、一度無効化したのちレストポーズで初期化)
-    const mmdModel = this.mmdRuntime.createMmdModel(mesh);
-    mmdModel.physicsEnabled = false;
+    // MmdRuntimeにモデルを登録
+    const mmdModel = this.mmdRuntime.createMmdModel(mesh, {
+      materialProxyConstructor: this.materialMode === "standard" ? MmdStandardMaterialProxy : null,
+      trimMetadata: false,
+      buildPhysics: true
+    });
+
+    // 物理初期化バグを防ぐため、レストポーズに戻してから物理状態を構築する
     if (mesh.skeleton) {
       mesh.skeleton.returnToRestPose();
     }
     mesh.computeWorldMatrix(true);
-    mmdModel.initializePhysics();
+
+    this._applyRigidBodyStatesAfterCreate(mmdModel, mesh);
+    this.mmdRuntime.initializeMmdModelPhysics(mmdModel);
     this._optimizeBreastPhysicsDirectly(mmdModel, mesh);
     this._optimizeBodyBasePhysicsDirectly(mmdModel, mesh);
-    mmdModel.physicsEnabled = !this.physicsDisableGlobally;
 
     const id = "model_" + (this._modelIdCounter++);
     this.deployedModels.set(id, {
@@ -386,10 +448,11 @@ export class MmdManager {
       mmdModel,
       name: pmxFileName,
       zipName: zipName,
-      motions: new Map(),
-      shadowEnabled: true,
+      motions: new Map(), // name -> { animation, handle }
       audio: null,
-      userMorphOverrides: new Map()
+      userMorphOverrides: new Map(),
+      assetContainer: container,
+      runtimeAnimationHandles: new Map() // name -> handle
     });
     this.activeModelId = id;
 
@@ -398,19 +461,19 @@ export class MmdManager {
     const bonesSource = mmdModel.runtimeBones || (mesh.skeleton ? mesh.skeleton.bones : null);
     if (this.boneLogEnabled && bonesSource) {
       console.log(` - Total Bones: ${bonesSource.length}`);
-      
+
       // 最初のボーンのプロパティ構成を出力してデバッグしやすくする
       if (bonesSource.length > 0) {
         const sampleBone = bonesSource[0];
         console.log("Sample Bone Keys:", Object.keys(sampleBone));
-        if (sampleBone.babylonBone) {
-          console.log("Sample Babylon Bone Keys:", Object.keys(sampleBone.babylonBone));
+        if (sampleBone.linkedBone) {
+          console.log("Sample Linked Bone Keys:", Object.keys(sampleBone.linkedBone));
         }
       }
 
       const targetBoneNames = [
-        "すべての親", "全ての親", 
-        "センター", "グルーブ", "腰", 
+        "すべての親", "全ての親",
+        "センター", "グルーブ", "腰",
         "下半身", "上半身", "上半身2",
         "左足", "右足", "左ひざ", "右ひざ", "左足首", "右足首",
         "左足ＩＫ", "右足ＩＫ", "左つま先ＩＫ", "右つま先ＩＫ"
@@ -437,19 +500,21 @@ export class MmdManager {
 
           const parentChain = getParentChain(bone);
           let localPos = "N/A";
-          
-          if (bone.babylonBone && bone.babylonBone.position) {
+
+          if (bone.linkedBone && bone.linkedBone.position) {
+            localPos = bone.linkedBone.position.toString();
+          } else if (bone.babylonBone && bone.babylonBone.position) {
             localPos = bone.babylonBone.position.toString();
           } else if (bone.position) {
             localPos = bone.position.toString();
           }
-          
+
           const idx = bonesSource.indexOf(bone);
           const flag = bone.flag !== undefined ? bone.flag : "N/A";
           const isMovable = (typeof flag === "number") ? ((flag & 0x0004) !== 0) : "N/A";
           const order = bone.transformOrder !== undefined ? bone.transformOrder : "N/A";
           const afterPhys = bone.transformAfterPhysics !== undefined ? bone.transformAfterPhysics : "N/A";
-          
+
           console.log(`Bone [${boneName}]: Index = ${idx}, Parent Chain = ${parentChain}, flag = ${flag} (Movable: ${isMovable}), transformOrder = ${order}, transformAfterPhysics = ${afterPhys}, Local Pos = ${localPos}`);
         } else {
           console.log(`Bone [${boneName}]: %cNOT FOUND`, "color: #FF5722;");
@@ -490,7 +555,10 @@ export class MmdManager {
   async loadMotion(vmdFileName, modelId = this.activeModelId) {
     const model = this.deployedModels.get(modelId);
     if (!model) {
-      throw new Error("No active model or target model not found to load motion.");
+      const available = Array.from(this.deployedModels.keys()).join(", ") || "(none)";
+      throw new Error(
+        `No active model or target model not found to load motion. (requested: ${modelId ?? "null"}, available: ${available})`
+      );
     }
 
     // 既存のすべてのモーションと音声を解除する
@@ -498,11 +566,16 @@ export class MmdManager {
       model.audio.pause();
       model.audio = null;
     }
-    // アニメーションを明示的にクリア
-    model.mmdModel.setAnimation(null);
-    for (const key of Array.from(model.motions.keys())) {
-      this.removeMotion(key, modelId);
+
+    for (const entry of model.motions.values()) {
+      const handle = entry?.handle;
+      if (handle !== undefined && handle !== null) {
+        model.mmdModel.destroyRuntimeAnimation(handle);
+      }
     }
+    model.mmdModel.setRuntimeAnimation(null);
+    model.motions.clear();
+    model.runtimeAnimationHandles?.clear();
 
     // 再生時間を0にリセット
     this.mmdRuntime.seekAnimation(0);
@@ -510,8 +583,7 @@ export class MmdManager {
     // モーション由来のモーフ残存をクリアし、ユーザー手動設定のみ復元
     this._restoreUserMorphOverrides(model);
 
-    // 物理を無効化してスケルトンを初期姿勢に戻し、物理を再構築
-    model.mmdModel.physicsEnabled = false;
+    // スケルトンを初期姿勢に戻してから物理を再構築する
     if (model.mesh.skeleton) {
       model.mesh.skeleton.returnToRestPose();
     }
@@ -522,10 +594,9 @@ export class MmdManager {
       model.mmdModel.ikSolverStates.fill(1);
     }
 
-    model.mmdModel.initializePhysics();
+    this.mmdRuntime.initializeMmdModelPhysics(model.mmdModel);
     this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
     this._optimizeBodyBasePhysicsDirectly(model.mmdModel, model.mesh);
-    model.mmdModel.physicsEnabled = !this.physicsDisableGlobally;
 
     const vmdBlobUrl = this.resolvePath(vmdFileName);
     if (!vmdBlobUrl) {
@@ -537,9 +608,10 @@ export class MmdManager {
       return await vmdLoader.loadAsync(vmdFileName, vmdBlobUrl);
     });
 
-    model.mmdModel.addAnimation(animation);
-    model.mmdModel.setAnimation(vmdFileName);
-    model.motions.set(vmdFileName, animation);
+    const handle = model.mmdModel.createRuntimeAnimation(animation);
+    model.mmdModel.setRuntimeAnimation(handle);
+    model.motions.set(vmdFileName, { animation, handle });
+    model.runtimeAnimationHandles.set(vmdFileName, handle);
 
     // 同名音声ファイル（.wav / .mp3）の検索とロード
     const lastSlash = vmdFileName.lastIndexOf("/");
@@ -581,11 +653,11 @@ export class MmdManager {
     console.log(`%c[MMD Motion Loaded] ${vmdFileName} for Model: ${model.name}`, "color: #2196F3; font-weight: bold; font-size: 1.2em;");
     if (this.boneLogEnabled && animation) {
       console.log("Raw Motion Object:", animation);
-      
+
       const tracks = [];
       if (animation.boneTracks) tracks.push(...animation.boneTracks);
       if (animation.movableBoneTracks) tracks.push(...animation.movableBoneTracks);
-      
+
       console.log(` - Motion Bone Tracks Count: ${tracks.length}`);
       const trackNames = tracks.map(b => b.name);
       console.log(" - Tracks list:", trackNames);
@@ -593,9 +665,9 @@ export class MmdManager {
       // 主要なボーンアニメーションがモデルに存在するかチェック
       console.group(`Motion Bone Mapping Check for ${model.name}`);
       const importantMotionBones = ["すべての親", "全ての親", "センター", "グルーブ", "腰", "下半身", "左足ＩＫ", "右足ＩＫ"];
-      
+
       const modelBones = model.mmdModel.runtimeBones || (model.mesh.skeleton ? model.mesh.skeleton.bones : []);
-      
+
       importantMotionBones.forEach(boneName => {
         const hasTrack = trackNames.includes(boneName);
         const hasBone = modelBones.some(b => b.name === boneName);
@@ -629,12 +701,21 @@ export class MmdManager {
       return await vmdLoader.loadAsync(vmdFileName, vmdBlobUrl);
     });
 
-    this.activeCameraMotion = cameraAnimation;
-    const mmdCamera = this.mmdRuntime.camera;
-    if (mmdCamera) {
-      const handle = mmdCamera.createRuntimeAnimation(cameraAnimation);
-      mmdCamera.setRuntimeAnimation(handle);
+    // 既存のカメラモーションがあれば先に破棄する
+    if (this.cameraHandle !== null && this.cameraHandle !== undefined) {
+      this.mmdCamera.setRuntimeAnimation(null);
+      this.mmdCamera.destroyRuntimeAnimation(this.cameraHandle);
+      this.cameraHandle = null;
     }
+
+    const handle = this.mmdCamera.createRuntimeAnimation(cameraAnimation);
+    this.mmdCamera.setRuntimeAnimation(handle);
+
+    this.activeCameraMotion = cameraAnimation;
+    this.cameraHandle = handle;
+
+    // MMDカメラへ切り替え（デスクトップ用ArcRotateCameraの入力制御には触れない）
+    this.scene.activeCamera = this.mmdCamera;
   }
 
   get isPlaying() {
@@ -687,56 +768,56 @@ export class MmdManager {
       if (!isPlaying) {
         if (model.mmdModel) {
           // 初期姿勢（Tポーズ）での物理リセット
-          model.mmdModel.physicsEnabled = false;
-          if (model.mmdModel.mesh.skeleton) {
-            model.mmdModel.mesh.skeleton.returnToRestPose();
+          if (model.mesh.skeleton) {
+            model.mesh.skeleton.returnToRestPose();
           }
-          model.mmdModel.mesh.computeWorldMatrix(true);
-          model.mmdModel.initializePhysics();
+          model.mesh.computeWorldMatrix(true);
+          this.mmdRuntime.initializeMmdModelPhysics(model.mmdModel);
           this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
           this._optimizeBodyBasePhysicsDirectly(model.mmdModel, model.mesh);
-          model.mmdModel.physicsEnabled = !this.physicsDisableGlobally;
         }
       }
     }
   }
 
-
   removeMotion(vmdFileName, modelId = this.activeModelId) {
     const model = this.deployedModels.get(modelId);
-    if (model && model.motions.has(vmdFileName)) {
-      const index = model.mmdModel.runtimeAnimations.findIndex(
-        anim => anim.animation.name === vmdFileName
-      );
-      if (index !== -1) {
-        model.mmdModel.removeAnimation(index);
-      }
-      model.motions.delete(vmdFileName);
+    if (!model || !model.motions.has(vmdFileName)) return;
+
+    const entry = model.motions.get(vmdFileName);
+    const handle = entry?.handle;
+    if (handle !== undefined && handle !== null) {
+      model.mmdModel.destroyRuntimeAnimation(handle);
     }
+    model.motions.delete(vmdFileName);
+    model.runtimeAnimationHandles?.delete(vmdFileName);
   }
 
   removeCameraMotion() {
-    const mmdCamera = this.mmdRuntime.camera;
-    if (mmdCamera) {
-      mmdCamera.setRuntimeAnimation(null);
+    if (this.mmdCamera) {
+      this.mmdCamera.setRuntimeAnimation(null);
+      if (this.cameraHandle !== null && this.cameraHandle !== undefined) {
+        this.mmdCamera.destroyRuntimeAnimation(this.cameraHandle);
+      }
     }
+    this.cameraHandle = null;
     this.activeCameraMotion = null;
+
+    // MMDカメラがアクティブだった場合はデスクトップ用カメラへ戻す
+    if (this.scene.activeCamera === this.mmdCamera) {
+      this.scene.activeCamera = this.camera;
+    }
   }
 
   removeModel(modelId) {
     const model = this.deployedModels.get(modelId);
-    if (model) {
-      if (model.audio) {
-        model.audio.pause();
-        model.audio = null;
-      }
-      this.mmdRuntime.destroyMmdModel(model.mmdModel);
-      model.mesh.dispose();
-      this.deployedModels.delete(modelId);
-      if (this.activeModelId === modelId) {
-        const keys = Array.from(this.deployedModels.keys());
-        this.activeModelId = keys.length > 0 ? keys[0] : null;
-      }
+    if (!model) return;
+
+    this._disposeModelEntry(model);
+    this.deployedModels.delete(modelId);
+    if (this.activeModelId === modelId) {
+      const keys = Array.from(this.deployedModels.keys());
+      this.activeModelId = keys.length > 0 ? keys[0] : null;
     }
   }
 
@@ -761,29 +842,9 @@ export class MmdManager {
     }
   }
 
-  setModelShadowEnabled(modelId, enabled) {
-    const model = this.deployedModels.get(modelId);
-    if (model) {
-      model.shadowEnabled = enabled;
-      const shadowGenerator = this.scene.lights.find(l => l.name === "dirLight")?._shadowGenerator;
-      if (shadowGenerator) {
-        if (enabled) {
-          shadowGenerator.addShadowCaster(model.mesh, true);
-        } else {
-          shadowGenerator.removeShadowCaster(model.mesh);
-        }
-      }
-    }
-  }
-
   clearDeployedModels() {
     for (const model of this.deployedModels.values()) {
-      if (model.audio) {
-        model.audio.pause();
-        model.audio = null;
-      }
-      this.mmdRuntime.destroyMmdModel(model.mmdModel);
-      model.mesh.dispose();
+      this._disposeModelEntry(model);
     }
     this.deployedModels.clear();
     this.activeModelId = null;
@@ -795,18 +856,8 @@ export class MmdManager {
   }
 
   clear() {
-    for (const model of this.deployedModels.values()) {
-      if (model.audio) {
-        model.audio.pause();
-        model.audio = null;
-      }
-      this.mmdRuntime.destroyMmdModel(model.mmdModel);
-      model.mesh.dispose();
-    }
-    this.deployedModels.clear();
-    this.activeModelId = null;
-    this.removeCameraMotion();
-    
+    this.clearDeployedModels();
+
     // Blob URLを解放してメモリリークを防ぐ
     for (const entry of this.fileMap.values()) {
       URL.revokeObjectURL(entry.blobUrl);
@@ -814,6 +865,144 @@ export class MmdManager {
     this.fileMap.clear();
   }
 
+  /**
+   * マテリアルモード（standard / pbr）を切り替える (Phase 4-b)
+   *
+   * 現在配置されているモデル群を一旦破棄し、選択したマテリアルビルダーで読み直す。
+   * 位置・回転・モーション・モーフ・再生位置/状態はスナップショットから復元する。
+   * 影キャストはロード時に常時有効。
+   */
+  async switchMaterialMode(mode) {
+    const targetMode = mode === "pbr" ? "pbr" : "standard";
+    if (targetMode === this.materialMode) return;
+
+    const wasPlaying = this.isPlaying;
+    const currentFrameTime = this.mmdRuntime.currentFrameTime;
+
+    // 現在配置されているモデルのスナップショットを保存
+    const snapshots = [];
+    for (const model of this.deployedModels.values()) {
+      const rotationDeg = this._getMeshRotationDeg(model.mesh);
+      snapshots.push({
+        name: model.name,
+        zipName: model.zipName,
+        position: [model.mesh.position.x, model.mesh.position.y, model.mesh.position.z],
+        rotation: rotationDeg,
+        motionKeys: Array.from(model.motions.keys()),
+        morphs: model.userMorphOverrides ? Array.from(model.userMorphOverrides.entries()) : []
+      });
+    }
+
+    this.pause();
+    this.clearDeployedModels();
+
+    this.materialMode = targetMode;
+    if (this.renderingManager) {
+      this.renderingManager.setMaterialMode(targetMode);
+    }
+    this._pbrMaterialBuilder.keywordPresetsEnabled = this.keywordPresetsEnabled;
+
+    for (const snap of snapshots) {
+      const { id } = await this.loadModel(snap.name, snap.zipName);
+      this.setModelPosition(id, snap.position[0], snap.position[1], snap.position[2]);
+      this.setModelRotation(id, snap.rotation[0], snap.rotation[1], snap.rotation[2]);
+
+      for (const motionName of snap.motionKeys) {
+        await this.loadMotion(motionName, id);
+      }
+      for (const [morphName, value] of snap.morphs) {
+        this.setMorphValue(id, morphName, value);
+      }
+    }
+
+    await this.mmdRuntime.seekAnimation(currentFrameTime, true);
+    if (wasPlaying) {
+      this.play();
+    }
+  }
+
+  // メッシュの現在の回転をオイラー角（度）で取得するヘルパー
+  _getMeshRotationDeg(mesh) {
+    const toDeg = (rad) => (rad * 180) / Math.PI;
+    if (mesh.rotationQuaternion) {
+      const euler = mesh.rotationQuaternion.toEulerAngles();
+      return [toDeg(euler.x), toDeg(euler.y), toDeg(euler.z)];
+    }
+    return [toDeg(mesh.rotation.x), toDeg(mesh.rotation.y), toDeg(mesh.rotation.z)];
+  }
+
+  // モデル1体分の全リソースを解放する共通処理
+  _disposeModelEntry(model) {
+    if (!model) return;
+
+    if (model.audio) {
+      model.audio.pause();
+      model.audio = null;
+    }
+
+    if (model.mmdModel) {
+      for (const entry of model.motions.values()) {
+        const handle = entry?.handle;
+        if (handle !== undefined && handle !== null) {
+          model.mmdModel.destroyRuntimeAnimation(handle);
+        }
+      }
+    }
+    model.motions.clear();
+    model.runtimeAnimationHandles?.clear();
+
+    if (this.renderingManager && model.mesh) {
+      this.renderingManager.removeShadowCaster(model.mesh);
+    }
+
+    if (model.mmdModel) {
+      this.mmdRuntime.destroyMmdModel(model.mmdModel);
+      model.mmdModel = null;
+    }
+
+    // 重要: material.dispose(true, true) は使わない。
+    // forceDisposeEffect=true だと同種マテリアルが共有する Effect（シェーダ）まで破棄され、
+    // 残ったモデルが真っ黒になる。forceDisposeTextures=true も同一 blob URL の
+    // InternalTexture 共有時に他モデルのテクスチャを壊す。
+    if (model.assetContainer) {
+      try {
+        model.assetContainer.removeAllFromScene();
+      } catch (_) {
+        // already removed
+      }
+
+      for (const mesh of [...(model.assetContainer.meshes || [])]) {
+        try {
+          mesh?.dispose(false, false);
+        } catch (_) {
+          // ignore
+        }
+      }
+      for (const mat of [...(model.assetContainer.materials || [])]) {
+        try {
+          // Effect / Texture は強制破棄しない
+          mat?.dispose(false, false);
+        } catch (_) {
+          // ignore
+        }
+      }
+      // コンテナ参照だけ切る（dispose() 全体は内部で texture 強制破棄する実装があるため避ける）
+      model.assetContainer.meshes = [];
+      model.assetContainer.materials = [];
+      model.assetContainer.textures = [];
+      model.assetContainer.skeletons = [];
+      model.assetContainer.animationGroups = [];
+      model.assetContainer = null;
+    } else if (model.mesh) {
+      try {
+        model.mesh.dispose(false, false);
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    model.mesh = null;
+  }
 
   /** モデル配下の全マテリアルでアウトライン描画を無効化する */
   _disableModelOutlines(rootMesh) {
@@ -846,18 +1035,6 @@ export class MmdManager {
     const joints = mesh.metadata.joints || [];
     const bones = mesh.skeleton ? mesh.skeleton.bones : [];
 
-    // 除外する不要な物理剛体のキーワード
-    const ignoreKeywords = ["下着", "パンツ", "インナー", "アンダーウェア", "pants", "underwear", "inner"];
-
-    // 体幹・基幹ボーンのキーワード
-    const bodyBaseKeywords = ["センター", "グルーブ", "腰", "骨盤", "下半身", "上半身", "首", "頭", "親", "体", "center", "groove", "waist", "pelvis", "lower body", "upper body", "neck", "head", "root", "spine", "hip", "torso", "body"];
-
-    // 揺れもののキーワード
-    const hairKeywords = ["髪", "ヘア", "hair", "ツインテ", "ポニテ", "前髪", "横髪", "後髪", "アホ毛", "サイド", "バック", "テール"];
-    const breastKeywords = ["胸", "おっぱい", "乳", "bust", "breast", "ちち"];
-    const skirtKeywords = ["スカート", "skirt", "裾", "フリル", "プリーツ"];
-    const accessoryKeywords = ["リボン", "ribbon", "袖", "sleeve", "紐", "ひも", "帯", "飾り", "羽", "ウイング", "wing", "しっぽ", "尻尾", "tail"];
-
     // 1. 剛体 (RigidBody) の最適化
     for (let i = 0; i < rigidBodies.length; ++i) {
       const rb = rigidBodies[i];
@@ -867,7 +1044,7 @@ export class MmdManager {
       const targetName = (rbName + "_" + boneName).toLowerCase();
 
       // 不要物理の除外 (FollowBoneにして衝突対象から外す)
-      const shouldIgnore = ignoreKeywords.some(kw => targetName.includes(kw));
+      const shouldIgnore = IGNORE_KEYWORDS.some(kw => targetName.includes(kw));
       if (shouldIgnore) {
         rb.physicsMode = 0; // FollowBone
         rb.collisionMask = 0; // 他のものと衝突させない
@@ -875,16 +1052,16 @@ export class MmdManager {
       }
 
       // 体幹・基幹ボーンの剛体は物理演算で動かさず、必ずアニメーションに追従させる (FollowBone)
-      const isBodyBase = bodyBaseKeywords.some(kw => targetName.includes(kw));
+      const isBodyBase = BODY_BASE_KEYWORDS.some(kw => targetName.includes(kw));
       if (isBodyBase) {
         rb.physicsMode = 0; // FollowBone
         continue;
       }
 
-      const isHair = hairKeywords.some(kw => targetName.includes(kw));
-      const isBreast = breastKeywords.some(kw => targetName.includes(kw));
-      const isSkirt = skirtKeywords.some(kw => targetName.includes(kw));
-      const isAccessory = accessoryKeywords.some(kw => targetName.includes(kw));
+      const isHair = HAIR_KEYWORDS.some(kw => targetName.includes(kw));
+      const isBreast = BREAST_KEYWORDS.some(kw => targetName.includes(kw));
+      const isSkirt = SKIRT_KEYWORDS.some(kw => targetName.includes(kw));
+      const isAccessory = ACCESSORY_KEYWORDS.some(kw => targetName.includes(kw));
 
       if (isHair || isBreast || isSkirt || isAccessory) {
         // 質量 (mass) の補正: 小さすぎると他剛体との衝突で投げられて伸びる
@@ -932,10 +1109,10 @@ export class MmdManager {
       const boneBName = boneB ? (boneB.name || "") : "";
       const nameConcat = (joint.name + "_" + rbA.name + "_" + rbB.name + "_" + boneAName + "_" + boneBName).toLowerCase();
 
-      const isHairJoint = hairKeywords.some(kw => nameConcat.includes(kw));
-      const isBreastJoint = breastKeywords.some(kw => nameConcat.includes(kw));
-      const isSkirtJoint = skirtKeywords.some(kw => nameConcat.includes(kw));
-      const isAccessoryJoint = accessoryKeywords.some(kw => nameConcat.includes(kw));
+      const isHairJoint = HAIR_KEYWORDS.some(kw => nameConcat.includes(kw));
+      const isBreastJoint = BREAST_KEYWORDS.some(kw => nameConcat.includes(kw));
+      const isSkirtJoint = SKIRT_KEYWORDS.some(kw => nameConcat.includes(kw));
+      const isAccessoryJoint = ACCESSORY_KEYWORDS.some(kw => nameConcat.includes(kw));
 
       if (isHairJoint || isBreastJoint || isSkirtJoint || isAccessoryJoint) {
         // 回転制限 (ラジアン)
@@ -968,20 +1145,78 @@ export class MmdManager {
     }
   }
 
+  /**
+   * createMmdModel 直後に呼び出し、rigidBodyStates (0=キネマティック/アニメ追従, 1=物理演算) の初期値を設定する。
+   * babylon-mmd 1.3 では mmdModel.physicsEnabled や _physicsModel._bodies は存在しないため、
+   * 公開APIである rigidBodyStates 配列を直接操作して有効/無効を切り替える。
+   */
+  _applyRigidBodyStatesAfterCreate(mmdModel, mesh) {
+    if (!mmdModel || !mmdModel.rigidBodyStates || !mesh.metadata || !mesh.metadata.rigidBodies) return;
+
+    const rigidBodies = mesh.metadata.rigidBodies;
+    const bones = mesh.skeleton ? mesh.skeleton.bones : [];
+    const states = mmdModel.rigidBodyStates;
+
+    for (let i = 0; i < rigidBodies.length && i < states.length; ++i) {
+      const rb = rigidBodies[i];
+      const bone = bones[rb.boneIndex];
+      const boneName = bone ? (bone.name || "") : "";
+      const targetName = ((rb.name || "") + "_" + boneName).toLowerCase();
+
+      const isIgnored = IGNORE_KEYWORDS.some(kw => targetName.includes(kw));
+      const isBodyBase = BODY_BASE_KEYWORDS.some(kw => targetName.includes(kw));
+      const isBreast = BREAST_KEYWORDS.some(kw => targetName.includes(kw));
+
+      if (isIgnored || isBodyBase) {
+        states[i] = 0;
+      } else if (isBreast && !this.breastPhysicsEnabled) {
+        states[i] = 0;
+      } else {
+        states[i] = 1;
+      }
+    }
+
+    if (this.physicsDisableGlobally) {
+      states.fill(0);
+    }
+  }
+
+  /**
+   * メッシュ直下（および子孫）の物理トランスフォームノード（MmdPhysicsTransformNode）を走査し、
+   * PMXメタデータの剛体配列とインデックスを対応付けながらコールバックする。
+   *
+   * babylon-mmd 1.3 では物理ノードは rootMesh の子として追加され、公開プロパティ physicsBody を持つ。
+   * ノード名は生成時の rigidBody.name がそのまま使われるため、name の一致でインデックスを解決する。
+   */
+  _iteratePhysicsNodes(mesh, callback) {
+    if (!mesh || typeof mesh.getChildTransformNodes !== "function") return;
+    const rigidBodies = mesh.metadata?.rigidBodies || [];
+    if (rigidBodies.length === 0) return;
+
+    // 同名剛体が複数存在するケースに備え、名前ごとにインデックスをキューイングする
+    const nameQueues = new Map();
+    for (let i = 0; i < rigidBodies.length; ++i) {
+      const key = rigidBodies[i].name || "";
+      if (!nameQueues.has(key)) nameQueues.set(key, []);
+      nameQueues.get(key).push(i);
+    }
+
+    const nodes = mesh.getChildTransformNodes(false);
+    for (const node of nodes) {
+      if (!node || !node.physicsBody) continue;
+      const queue = nameQueues.get(node.name || "");
+      const rbIndex = (queue && queue.length > 0) ? queue.shift() : -1;
+      const rb = rbIndex >= 0 ? rigidBodies[rbIndex] : null;
+      callback(node, rbIndex, rb);
+    }
+  }
+
   // 胸剛体の物理を直接最適化（ON/OFFおよび強度反映）
   _optimizeBreastPhysicsDirectly(mmdModel, mesh) {
-    if (!mmdModel || !mmdModel._physicsModel || !mmdModel._physicsModel._bodies) {
-      console.warn("MmdModel or physicsModel not ready for breast optimization.");
-      return;
-    }
-    const physicsModel = mmdModel._physicsModel;
-    const bodies = physicsModel._bodies;
-    const nodes = physicsModel._nodes;
-    if (!bodies || !nodes) return;
+    if (!mmdModel || !mesh) return;
 
-    const rigidBodies = mesh.metadata?.rigidBodies || [];
-    const breastKeywords = ["胸", "おっぱい", "乳", "bust", "breast", "ちち"];
     const bones = mesh.skeleton ? mesh.skeleton.bones : [];
+    const states = mmdModel.rigidBodyStates;
     let optimizedCount = 0;
 
     const enabled = this.breastPhysicsEnabled && this.breastPhysicsInertia > 0.0;
@@ -994,125 +1229,67 @@ export class MmdManager {
     // 倍率に応じて重力影響を少し強め、揺れの戻りを大きくする
     const gravityFactor = enabled ? Math.min(2.5, 0.7 + 0.3 * inertia) : 0.0;
 
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-      if (!node) continue;
-
-      const nodeName = node.name || "";
-      const rb = rigidBodies[i];
-      const rbName = rb ? (rb.name || "") : "";
-      const bone = bones[rb?.boneIndex];
+    this._iteratePhysicsNodes(mesh, (node, rbIndex, rb) => {
+      if (rbIndex < 0 || !rb) return;
+      const bone = bones[rb.boneIndex];
       const boneName = bone ? (bone.name || "") : "";
+      const targetName = ((node.name || "") + "_" + (rb.name || "") + "_" + boneName).toLowerCase();
+      const isBreast = BREAST_KEYWORDS.some(kw => targetName.includes(kw));
+      if (!isBreast) return;
 
-      const targetName = (nodeName + "_" + rbName + "_" + boneName).toLowerCase();
-      const isBreast = breastKeywords.some(kw => targetName.includes(kw));
+      const body = node.physicsBody;
+      if (!body) return;
 
-      if (isBreast) {
-        const body = bodies[i];
-        if (body) {
-          if (!enabled) {
-            // OFFの場合: 物理シミュレーションを無効化してFollowBoneに
-            node.physicsMode = 0; // FollowBone
-            if (typeof body.disableSimulation === "function") {
-              body.disableSimulation();
-            }
-            if (body.shape) {
-              body.shape.filterMembershipMask = 0;
-              body.shape.filterCollideMask = 0;
-            }
-            if (typeof body.setGravityFactor === "function") {
-              body.setGravityFactor(0.0);
-            } else {
-              body.gravityFactor = 0.0;
-            }
-          } else {
-            // ONの場合: 物理シミュレーションを有効化
-            node.physicsMode = 1; // Physics
-            if (typeof body.enableSimulation === "function") {
-              body.enableSimulation();
-            }
-
-            if (typeof body.setGravityFactor === "function") {
-              body.setGravityFactor(gravityFactor);
-            } else {
-              body.gravityFactor = gravityFactor;
-            }
-
-            // 衝突判定はめり込みによる暴走を防ぐため無効化したままとする (これで安定した揺れが保証される)
-            if (body.shape) {
-              body.shape.filterMembershipMask = 0;
-              body.shape.filterCollideMask = 0;
-            }
-
-            if (typeof body.setLinearDamping === "function") {
-              body.setLinearDamping(linearDamping);
-            } else {
-              body.linearDamping = linearDamping;
-            }
-            if (typeof body.setAngularDamping === "function") {
-              body.setAngularDamping(angularDamping);
-            } else {
-              body.angularDamping = angularDamping;
-            }
-          }
-          optimizedCount++;
+      if (!enabled) {
+        // OFFの場合: rigidBodyStates を 0 にしてアニメーション追従（キネマティック）にする
+        if (states && rbIndex < states.length) states[rbIndex] = 0;
+        if (typeof body.setGravityFactor === "function") {
+          body.setGravityFactor(0.0);
+        }
+      } else {
+        // ONの場合: rigidBodyStates を 1 にして物理演算に委ねる
+        if (states && rbIndex < states.length) states[rbIndex] = 1;
+        if (typeof body.setLinearDamping === "function") {
+          body.setLinearDamping(linearDamping);
+        }
+        if (typeof body.setAngularDamping === "function") {
+          body.setAngularDamping(angularDamping);
+        }
+        if (typeof body.setGravityFactor === "function") {
+          body.setGravityFactor(gravityFactor);
         }
       }
-    }
+      optimizedCount++;
+    });
+
     console.log(`[Physics Optimization] Breast settings updated. Enabled: ${enabled}, Inertia: ${inertia}, Optimized: ${optimizedCount} bodies.`);
   }
 
   // 体幹剛体の物理を直接最適化（物理演算による上書きを完全に防ぐ）
   _optimizeBodyBasePhysicsDirectly(mmdModel, mesh) {
-    if (!mmdModel || !mmdModel._physicsModel || !mmdModel._physicsModel._bodies) {
-      return;
-    }
-    const physicsModel = mmdModel._physicsModel;
-    const bodies = physicsModel._bodies;
-    const nodes = physicsModel._nodes;
-    if (!bodies || !nodes) return;
+    if (!mmdModel || !mesh) return;
 
-    const rigidBodies = mesh.metadata?.rigidBodies || [];
-    const bodyBaseKeywords = ["センター", "グルーブ", "腰", "骨盤", "下半身", "上半身", "首", "頭", "親", "体", "center", "groove", "waist", "pelvis", "lower body", "upper body", "neck", "head", "root", "spine", "hip", "torso", "body"];
-    
-    // skeletonがnullのモデルに対応するため、runtimeBonesを優先して参照する
-    const bones = mmdModel.runtimeBones || (mesh.skeleton ? mesh.skeleton.bones : []);
+    const bones = mesh.skeleton ? mesh.skeleton.bones : [];
+    const states = mmdModel.rigidBodyStates;
     let optimizedCount = 0;
 
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-      if (!node) continue;
-
-      const nodeName = node.name || "";
-      const rb = rigidBodies[i];
-      const rbName = rb ? (rb.name || "") : "";
-      
-      const bone = rb ? (bones[rb.boneIndex] || bones.find(b => bones.indexOf(b) === rb.boneIndex)) : null;
+    this._iteratePhysicsNodes(mesh, (node, rbIndex, rb) => {
+      if (rbIndex < 0 || !rb) return;
+      const bone = bones[rb.boneIndex];
       const boneName = bone ? (bone.name || "") : "";
+      const targetName = ((node.name || "") + "_" + (rb.name || "") + "_" + boneName).toLowerCase();
+      const isBodyBase = BODY_BASE_KEYWORDS.some(kw => targetName.includes(kw));
+      if (!isBodyBase) return;
 
-      const targetName = (nodeName + "_" + rbName + "_" + boneName).toLowerCase();
-      const isBodyBase = bodyBaseKeywords.some(kw => targetName.includes(kw));
+      if (states && rbIndex < states.length) states[rbIndex] = 0;
 
-      if (isBodyBase) {
-        node.physicsMode = 0; // FollowBone
-        const body = bodies[i];
-        if (body) {
-          if (typeof body.disableSimulation === "function") {
-            body.disableSimulation();
-          }
-          if (body.shape) {
-            body.shape.filterMembershipMask = 0;
-            body.shape.filterCollideMask = 0;
-          }
-          if (typeof body.setGravityFactor === "function") {
-            body.setGravityFactor(0.0);
-          } else {
-            body.gravityFactor = 0.0;
-          }
-        }
-        optimizedCount++;
+      const body = node.physicsBody;
+      if (body && typeof body.setGravityFactor === "function") {
+        body.setGravityFactor(0.0);
       }
-    }
+      optimizedCount++;
+    });
+
     console.log(`[Physics Optimization] Body base settings updated. Optimized: ${optimizedCount} bodies.`);
   }
 
@@ -1140,32 +1317,36 @@ export class MmdManager {
     this.breastPhysicsInertia = inertia;
 
     for (const model of this.deployedModels.values()) {
+      if (!model.mmdModel) continue;
+      this._applyRigidBodyStatesAfterCreate(model.mmdModel, model.mesh);
       this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
+      this._optimizeBodyBasePhysicsDirectly(model.mmdModel, model.mesh);
+      // 減衰値が大きく変わった際の速度残留による破綻を防ぐため、剛体の位置・速度を再初期化する
+      this.mmdRuntime.initializeMmdModelPhysics(model.mmdModel);
     }
   }
 
   setPhysicsDisableGlobally(disabled) {
     this.physicsDisableGlobally = disabled;
-    if (this.mmdPhysics) {
-      this.mmdPhysics.enabled = !disabled;
-    }
-    if (this.mmdRuntime) {
-      this.mmdRuntime.physicsEnabled = !disabled;
+
+    for (const model of this.deployedModels.values()) {
+      if (!model.mmdModel) continue;
+      if (disabled) {
+        model.mmdModel.rigidBodyStates.fill(0);
+      } else {
+        this._applyRigidBodyStatesAfterCreate(model.mmdModel, model.mesh);
+        this._optimizeBreastPhysicsDirectly(model.mmdModel, model.mesh);
+        this._optimizeBodyBasePhysicsDirectly(model.mmdModel, model.mesh);
+      }
     }
 
     this._applyPhysicsTimestep();
-    
-    for (const model of this.deployedModels.values()) {
-      if (model.mmdModel) {
-        model.mmdModel.physicsEnabled = !disabled;
-      }
-    }
   }
 
   getMorphTargets(modelId) {
     const model = this.deployedModels.get(modelId);
     if (!model || !model.mmdModel || !model.mmdModel.morph) return [];
-    
+
     const targets = [];
     const morphs = model.mmdModel.morph.morphs;
     for (let i = 0; i < morphs.length; i++) {
@@ -1214,7 +1395,7 @@ export class MmdManager {
     const runtimeTime = this.mmdRuntime.currentTime;
     const isPlaying = this.mmdRuntime.isAnimationPlaying;
     const frameIndex = runtimeTime * 30; // 30fps VMD frame
-    
+
     console.log(`%c=== MMD Realtime Debug (Time: ${runtimeTime.toFixed(4)}s, Frame: ${frameIndex.toFixed(2)}, Playing: ${isPlaying}) ===`, "color: #FF5722; font-weight: bold; font-size: 1.1em;");
 
     console.log("=== MmdRuntime Raw Object ===", this.mmdRuntime);
@@ -1225,7 +1406,7 @@ export class MmdManager {
       console.log("Mesh Position:", model.mesh.position.toString());
       console.log("=== MmdModel Raw Object ===", model.mmdModel);
 
-      // _currentAnimation のバインドマップダンプ
+      // currentAnimation のバインドマップダンプ
       this._dumpBindMaps(model, null);
 
       let animDetails = "";
@@ -1262,20 +1443,23 @@ export class MmdManager {
 
       // 主要ボーンのダンプ
       const targetBoneNames = ["全ての親", "すべての親", "センター", "グルーブ", "腰", "下半身", "左足ＩＫ", "右足ＩＫ"];
-      
+
       targetBoneNames.forEach(boneName => {
         const bone = bonesSource.find(b => b.name === boneName);
         if (!bone) return;
 
         let worldPos = new Vector3();
         let localPos = new Vector3();
-        
+
         if (bone.worldMatrix) {
           if (bone.worldMatrix.m) {
             worldPos = Vector3.TransformCoordinates(Vector3.Zero(), bone.worldMatrix);
           } else if (bone.worldMatrix.length === 16) {
             worldPos.set(bone.worldMatrix[12], bone.worldMatrix[13], bone.worldMatrix[14]);
           }
+        } else if (bone.linkedBone) {
+          const wm = bone.linkedBone.getWorldMatrix ? bone.linkedBone.getWorldMatrix() : null;
+          if (wm) worldPos = Vector3.TransformCoordinates(Vector3.Zero(), wm);
         } else if (bone.babylonBone) {
           const wm = bone.babylonBone.getWorldMatrix();
           worldPos = Vector3.TransformCoordinates(Vector3.Zero(), wm);
@@ -1283,6 +1467,8 @@ export class MmdManager {
 
         if (typeof bone.getAnimationPositionOffsetToRef === "function") {
           bone.getAnimationPositionOffsetToRef(localPos);
+        } else if (bone.linkedBone) {
+          localPos = bone.linkedBone.position.clone();
         } else if (bone.babylonBone) {
           localPos = bone.babylonBone.position.clone();
         }
@@ -1318,7 +1504,7 @@ export class MmdManager {
           console.log(`%c   [Raw] linkedBone.position = {X:${rawPos.x.toFixed(6)} Y:${rawPos.y.toFixed(6)} Z:${rawPos.z.toFixed(6)}}`, "color: #FF9800;");
           console.log(`%c   [Raw] restMatrix.translation = {X:${restVec.x.toFixed(6)} Y:${restVec.y.toFixed(6)} Z:${restVec.z.toFixed(6)}}`, "color: #FF9800;");
           console.log(`%c   [Raw] diff (should == animOffset) = {X:${(rawPos.x-restVec.x).toFixed(6)} Y:${(rawPos.y-restVec.y).toFixed(6)} Z:${(rawPos.z-restVec.z).toFixed(6)}}`, "color: #FF9800;");
-          
+
           if (bone.linkedBone._linkedTransformNode) {
             const ltn = bone.linkedBone._linkedTransformNode;
             console.log(`%c   [LinkedTransformNode] name: "${ltn.name}", pos: {X:${ltn.position.x.toFixed(6)} Y:${ltn.position.y.toFixed(6)} Z:${ltn.position.z.toFixed(6)}}`, "color: #03A9F4; font-weight: bold;");
@@ -1338,7 +1524,8 @@ export class MmdManager {
         }
 
         // モーションの対応キーフレーム探索（movableBoneTracks と boneTracks を分けて表示）
-        for (const [motionName, anim] of model.motions.entries()) {
+        for (const [motionName, motionEntry] of model.motions.entries()) {
+          const anim = motionEntry?.animation ?? motionEntry;
           const findClosestKeyframe = (track) => {
             if (!track || !track.frameNumbers || track.frameNumbers.length === 0) return null;
             let closestIdx = 0;
@@ -1366,7 +1553,7 @@ export class MmdManager {
           };
 
           // ① movableBoneTracks（位置＋回転トラック）を検索
-          const movableTrack = (anim.movableBoneTracks || []).find(t => t.name === boneName);
+          const movableTrack = (anim?.movableBoneTracks || []).find(t => t.name === boneName);
           if (movableTrack) {
             const frameCount = movableTrack.frameNumbers?.length ?? 0;
             if (frameCount === 0) {
@@ -1381,7 +1568,7 @@ export class MmdManager {
           }
 
           // ② boneTracks（回転のみトラック）を検索
-          const boneTrack = (anim.boneTracks || []).find(t => t.name === boneName);
+          const boneTrack = (anim?.boneTracks || []).find(t => t.name === boneName);
           if (boneTrack) {
             const frameCount = boneTrack.frameNumbers?.length ?? 0;
             const kf = findClosestKeyframe(boneTrack);
@@ -1394,11 +1581,11 @@ export class MmdManager {
     }
   }
 
-  // _currentAnimation のバインドマップをダンプするヘルパー
+  // currentAnimation のバインドマップをダンプするヘルパー
   _dumpBindMaps(model, contextLabel) {
-    const runtimeAnim = model.mmdModel._currentAnimation;
+    const runtimeAnim = model.mmdModel.currentAnimation ?? model.mmdModel._currentAnimation;
     if (!runtimeAnim) {
-      console.log(`%c[Bind Map Dump] No _currentAnimation for ${model.name}`, "color: #FF9800;");
+      console.log(`%c[Bind Map Dump] No currentAnimation for ${model.name}`, "color: #FF9800;");
       return;
     }
 
