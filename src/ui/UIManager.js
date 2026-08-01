@@ -1744,15 +1744,26 @@ export class UIManager {
     this.graphicsKeyElevationValue = document.querySelector(".graphics-key-elevation-value");
     this.graphicsKeyIntensityInput = document.querySelector(".graphics-key-intensity-input");
     this.graphicsKeyIntensityValue = document.querySelector(".graphics-key-intensity-value");
+    this.graphicsShadowToggle = document.querySelector(".graphics-shadow-toggle");
     this.graphicsShadowDarknessInput = document.querySelector(".graphics-shadow-darkness-input");
     this.graphicsShadowDarknessValue = document.querySelector(".graphics-shadow-darkness-value");
+
+    // マテリアルモードを先にエンジンへ同期（UI だけ PBR で描画が Standard のままになるのを防ぐ）
+    // 品質プリセットより前に適用し、PBR 向けのフルプリセット適用が効くようにする
+    const materialMode = saved.materialMode === "pbr" ? "pbr" : "standard";
+    if (this.graphicsMaterialSelect) {
+      this.graphicsMaterialSelect.value = materialMode;
+    }
+    if (this.mmdManager.materialMode !== materialMode) {
+      this.mmdManager.materialMode = materialMode;
+    }
+    if (rm && rm.materialMode !== materialMode) {
+      rm.setMaterialMode(materialMode);
+    }
 
     if (this.graphicsQualitySelect) {
       this.graphicsQualitySelect.value = saved.qualityPreset || "auto";
       rm?.setQualityPreset(this.graphicsQualitySelect.value);
-    }
-    if (this.graphicsMaterialSelect) {
-      this.graphicsMaterialSelect.value = saved.materialMode || "standard";
     }
     if (this.graphicsKeywordPresetsToggle) {
       this.graphicsKeywordPresetsToggle.checked = !!saved.keywordPresetsEnabled;
@@ -1825,15 +1836,64 @@ export class UIManager {
       if (this.graphicsKeyIntensityValue) this.graphicsKeyIntensityValue.textContent = Number(mul).toFixed(2);
       rm?.setKeyIntensityMul(parseFloat(mul));
     }
+    if (this.graphicsShadowToggle) {
+      const shadowOn = saved.shadowEnabled !== false;
+      this.graphicsShadowToggle.checked = shadowOn;
+      rm?.setShadowEnabled(shadowOn);
+    }
     if (this.graphicsShadowDarknessInput) {
-      const mode = saved.materialMode || "standard";
-      const modeDefault = mode === "pbr" ? 0.75 : 0.35;
+      const modeDefault = materialMode === "pbr" ? 0.75 : 0.35;
       const darkness = saved.shadowDarkness ?? s.shadowDarkness ?? modeDefault;
       this.graphicsShadowDarknessInput.value = darkness;
       if (this.graphicsShadowDarknessValue) {
         this.graphicsShadowDarknessValue.textContent = Number(darkness).toFixed(2);
       }
       rm?.setShadowDarkness(parseFloat(darkness));
+    }
+
+    this._syncGraphicsUiForMaterialMode(materialMode);
+  }
+
+  /**
+   * Bloom / DoF / IBL 等の PBR 専用コントロールの表示切替。
+   * Standard 時は非表示（設定値は localStorage に保持）。
+   */
+  _syncGraphicsUiForMaterialMode(mode) {
+    const isPbr = mode === "pbr";
+    document.querySelectorAll(".graphics-pbr-only").forEach((el) => {
+      el.style.display = isPbr ? "" : "none";
+    });
+  }
+
+  /** 表示中の PBR トグル値をエンジンへ再適用（設定ロード後など） */
+  _applyPbrFxFromUi() {
+    const rm = this._getRenderingManager();
+    if (!rm || rm.materialMode !== "pbr") return;
+    if (this.graphicsBloomToggle) rm.setBloomEnabled(this.graphicsBloomToggle.checked);
+    if (this.graphicsDofToggle) rm.setDofEnabled(this.graphicsDofToggle.checked);
+    if (this.graphicsSharpenToggle) rm.setSharpenEnabled(this.graphicsSharpenToggle.checked);
+    if (this.graphicsSsaoToggle) rm.setSsaoEnabled(this.graphicsSsaoToggle.checked);
+    if (this.graphicsIblToggle) rm.setIblEnabled(this.graphicsIblToggle.checked);
+    if (this.graphicsIblIntensityInput) {
+      rm.setIblIntensity(parseFloat(this.graphicsIblIntensityInput.value));
+    }
+  }
+
+  /** モード切替後: エンジン（プリセット / スナップショット）を UI に反映 */
+  _syncPbrFxUiFromEngine() {
+    const rm = this._getRenderingManager();
+    if (!rm || rm.materialMode !== "pbr") return;
+    const s = rm.settings;
+    if (this.graphicsBloomToggle) this.graphicsBloomToggle.checked = !!s.bloom;
+    if (this.graphicsDofToggle) this.graphicsDofToggle.checked = !!s.dof;
+    if (this.graphicsSharpenToggle) this.graphicsSharpenToggle.checked = !!s.sharpen;
+    if (this.graphicsSsaoToggle) this.graphicsSsaoToggle.checked = !!s.ssao;
+    if (this.graphicsIblToggle) this.graphicsIblToggle.checked = s.ibl !== false;
+    if (this.graphicsIblIntensityInput && typeof s.iblIntensity === "number") {
+      this.graphicsIblIntensityInput.value = s.iblIntensity;
+      if (this.graphicsIblIntensityValue) {
+        this.graphicsIblIntensityValue.textContent = Number(s.iblIntensity).toFixed(2);
+      }
     }
   }
 
@@ -1853,17 +1913,11 @@ export class UIManager {
         await this.mmdManager.switchMaterialMode(mode);
         // 再ロードで modelId が変わるため、配置リストを必ず同期する
         this.updateDeployedModelsList();
-        // モード切替で影の濃さ・SSAO 既定が変わるので UI を同期
+        this._syncGraphicsUiForMaterialMode(mode);
+        // モード切替で影の濃さ・PBR FX 既定が変わるので UI をエンジンに合わせる
         this._syncShadowDarknessUiFromEngine();
-        const rmAfter = this._getRenderingManager();
-        if (this.graphicsSsaoToggle && typeof rmAfter?.settings?.ssao === "boolean") {
-          this.graphicsSsaoToggle.checked = rmAfter.settings.ssao;
-        }
-        if (this.graphicsIblIntensityInput && typeof rmAfter?.settings?.iblIntensity === "number") {
-          this.graphicsIblIntensityInput.value = rmAfter.settings.iblIntensity;
-          if (this.graphicsIblIntensityValue) {
-            this.graphicsIblIntensityValue.textContent = Number(rmAfter.settings.iblIntensity).toFixed(2);
-          }
+        if (mode === "pbr") {
+          this._syncPbrFxUiFromEngine();
         }
         this._persistGraphicsSettings();
         this.setStatusText(`マテリアル: ${mode}`);
@@ -1871,6 +1925,7 @@ export class UIManager {
         console.error(e);
         this.setStatusText(`マテリアル切替エラー: ${e.message}`);
         this.graphicsMaterialSelect.value = this.mmdManager.materialMode;
+        this._syncGraphicsUiForMaterialMode(this.mmdManager.materialMode);
         this.updateDeployedModelsList();
       } finally {
         this.showLoading(false);
@@ -1948,6 +2003,12 @@ export class UIManager {
       this._persistGraphicsSettings();
     });
 
+    this.graphicsShadowToggle?.addEventListener("change", () => {
+      rm()?.setShadowEnabled(this.graphicsShadowToggle.checked);
+      this._persistGraphicsSettings();
+      this.setStatusText(`影: ${this.graphicsShadowToggle.checked ? "ON" : "OFF"}`);
+    });
+
     this.graphicsShadowDarknessInput?.addEventListener("input", () => {
       const v = parseFloat(this.graphicsShadowDarknessInput.value);
       if (this.graphicsShadowDarknessValue) this.graphicsShadowDarknessValue.textContent = v.toFixed(2);
@@ -1984,6 +2045,7 @@ export class UIManager {
       keyAzimuth: this.graphicsKeyAzimuthInput ? parseFloat(this.graphicsKeyAzimuthInput.value) : 130,
       keyElevation: this.graphicsKeyElevationInput ? parseFloat(this.graphicsKeyElevationInput.value) : 55,
       keyIntensityMul: this.graphicsKeyIntensityInput ? parseFloat(this.graphicsKeyIntensityInput.value) : 1.0,
+      shadowEnabled: this.graphicsShadowToggle ? this.graphicsShadowToggle.checked : true,
       shadowDarkness: this.graphicsShadowDarknessInput
         ? parseFloat(this.graphicsShadowDarknessInput.value)
         : (rm?.settings?.shadowDarkness ?? 0.35)
@@ -2068,6 +2130,17 @@ export class UIManager {
     if (graphics.materialMode && graphics.materialMode !== this.mmdManager.materialMode) {
       if (this.graphicsMaterialSelect) this.graphicsMaterialSelect.value = graphics.materialMode;
       await this.mmdManager.switchMaterialMode(graphics.materialMode);
+    }
+    this._syncGraphicsUiForMaterialMode(
+      graphics.materialMode || this.mmdManager.materialMode || "standard"
+    );
+    // 切替後に PBR FX を UI 値で再適用（Standard 中はエンジン側で無効化されるため）
+    if ((graphics.materialMode || this.mmdManager.materialMode) === "pbr") {
+      this._applyPbrFxFromUi();
+    }
+    if (typeof graphics.shadowEnabled === "boolean") {
+      if (this.graphicsShadowToggle) this.graphicsShadowToggle.checked = graphics.shadowEnabled;
+      rm?.setShadowEnabled(graphics.shadowEnabled);
     }
     // マテリアル切替が darkness をモード既定に戻すため、保存値は最後に適用する
     if (typeof graphics.shadowDarkness === "number") {

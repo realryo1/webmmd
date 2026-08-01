@@ -128,10 +128,10 @@
                     <option value="pbr">PBR</option>
                   </select>
                 </label>
-                <p class="motion-empty graphics-pbr-note" style="margin:0.25em 0 0.5em;font-size:11px;line-height:1.4;">
+                <p class="motion-empty graphics-pbr-only graphics-pbr-note" style="margin:0.25em 0 0.5em;font-size:11px;line-height:1.4;">
                   PBR モードではマテリアルモーフ・sphere/toon マップは非対応です。切替時にモデルを再ロードします。
                 </p>
-                <label class="checkbox-field field--toggle">
+                <label class="checkbox-field field--toggle graphics-pbr-only">
                   <input class="graphics-keyword-presets-toggle" type="checkbox">
                   <span>PBR キーワード質感プリセット</span>
                 </label>
@@ -140,7 +140,7 @@
                   <span>露出 <span class="graphics-exposure-value">1.0</span></span>
                   <input class="graphics-exposure-input" type="range" min="0.4" max="2.0" step="0.05" value="1.0">
                 </label>
-                <label class="checkbox-field field--toggle">
+                <label class="checkbox-field field--toggle graphics-pbr-only">
                   <input class="graphics-bloom-toggle" type="checkbox">
                   <span>Bloom</span>
                 </label>
@@ -148,23 +148,23 @@
                   <input class="graphics-fxaa-toggle" type="checkbox" checked>
                   <span>FXAA</span>
                 </label>
-                <label class="checkbox-field field--toggle">
+                <label class="checkbox-field field--toggle graphics-pbr-only">
                   <input class="graphics-dof-toggle" type="checkbox">
                   <span>被写界深度 (DoF)</span>
                 </label>
-                <label class="checkbox-field field--toggle">
+                <label class="checkbox-field field--toggle graphics-pbr-only">
                   <input class="graphics-sharpen-toggle" type="checkbox">
                   <span>シャープネス</span>
                 </label>
-                <label class="checkbox-field field--toggle">
+                <label class="checkbox-field field--toggle graphics-pbr-only">
                   <input class="graphics-ssao-toggle" type="checkbox">
-                  <span>SSAO（PBR・中品質以上）</span>
+                  <span>SSAO（中品質以上）</span>
                 </label>
-                <label class="checkbox-field field--toggle">
+                <label class="checkbox-field field--toggle graphics-pbr-only">
                   <input class="graphics-ibl-toggle" type="checkbox" checked>
                   <span>IBL（環境光）</span>
                 </label>
-                <label class="field">
+                <label class="field graphics-pbr-only">
                   <span>IBL 強度 <span class="graphics-ibl-intensity-value">0.6</span></span>
                   <input class="graphics-ibl-intensity-input" type="range" min="0" max="2" step="0.05" value="0.6">
                 </label>
@@ -185,6 +185,10 @@
                 <label class="field">
                   <span>キー強度倍率 <span class="graphics-key-intensity-value">1.00</span></span>
                   <input class="graphics-key-intensity-input" type="range" min="0" max="2.5" step="0.05" value="1.0">
+                </label>
+                <label class="checkbox-field field--toggle">
+                  <input class="graphics-shadow-toggle" type="checkbox" checked>
+                  <span>影</span>
                 </label>
                 <label class="field">
                   <span>影の濃さ <span class="graphics-shadow-darkness-value">0.75</span></span>

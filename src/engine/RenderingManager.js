@@ -91,6 +91,22 @@ const SHADOW_DARKNESS_STANDARD = 0.35;
 const SHADOW_DARKNESS_PBR = 0.75;
 
 /**
+ * Standard(トゥーン)固定。品質プリセットでは解像度以外を触らない。
+ * medium 相当（影 ON / CSM OFF / MSAA 無し）。
+ */
+const STANDARD_BASELINE = {
+  // shadowEnabled はユーザー UI が管理（ここでは上書きしない）
+  shadowMapSize: 1024,
+  useCascadedShadows: false,
+  rimLight: true,
+  bloom: false,
+  msaa: 0,
+  sharpen: false,
+  ssao: false,
+  dof: false
+};
+
+/**
  * 描画（照明・影・ポストFX・IBL・品質）の中枢。
  */
 export class RenderingManager {
@@ -145,6 +161,8 @@ export class RenderingManager {
   _autoObserver = null;
   _casters = new Set();
   _keyLightGizmo = null;
+  /** PBR→Standard 切替時に退避し、PBR 復帰で復元する FX 設定 */
+  _pbrFxSnapshot = null;
 
   constructor(engine, scene, camera) {
     this.engine = engine;
@@ -269,6 +287,18 @@ export class RenderingManager {
   }
 
   _applyPreset(cfg) {
+    // Standard: 解像度（pixelRatio）のみ。影・ポストFX は STANDARD_BASELINE 固定
+    if (this.materialMode === "standard") {
+      if (this.engine && cfg.pixelRatio) {
+        this.engine.setHardwareScalingLevel(1 / cfg.pixelRatio);
+      }
+      this._applyStandardBaseline();
+      return;
+    }
+
+    // 影 ON/OFF はユーザー UI が管理（品質プリセットで上書きしない）
+    const keepShadow = this.settings.shadowEnabled;
+
     if (this.xrMode) {
       // XR 中は重い効果を強制OFF（後で setXrMode でも再適用）
       // DoF は手動トグル専用のため上書きしない（パイプライン側で XR 中は無効化）
@@ -283,6 +313,7 @@ export class RenderingManager {
     } else {
       Object.assign(this.settings, cfg);
     }
+    this.settings.shadowEnabled = keepShadow;
 
     if (this.engine && cfg.pixelRatio) {
       this.engine.setHardwareScalingLevel(1 / cfg.pixelRatio);
@@ -292,9 +323,7 @@ export class RenderingManager {
       this.rimLight.setEnabled(!!this.settings.rimLight && !this.xrMode);
     }
 
-    // PBR では品質プリセットによらず影を常時 ON（低品質で OFF にしない）
-    const shadowOn = this.materialMode === "pbr" ? true : !!this.settings.shadowEnabled;
-    this.setShadowEnabled(shadowOn);
+    this.setShadowEnabled(keepShadow);
     this._setShadowResolution(this.settings.shadowMapSize);
     this._syncPipelineFromSettings();
     this._syncLightingForMaterialMode();
@@ -302,18 +331,55 @@ export class RenderingManager {
     this.setExposure(this.settings.exposure);
   }
 
+  /** Standard 向け固定設定を適用（品質プリセット非依存） */
+  _applyStandardBaseline() {
+    const fxaa = this.settings.fxaa;
+    const exposure = this.settings.exposure;
+    const shadowEnabled = this.settings.shadowEnabled;
+    Object.assign(this.settings, STANDARD_BASELINE, { fxaa, exposure, shadowEnabled });
+
+    if (this.rimLight) {
+      this.rimLight.setEnabled(!!this.settings.rimLight && !this.xrMode);
+    }
+
+    this.setShadowEnabled(shadowEnabled);
+    this._setShadowResolution(this.settings.shadowMapSize);
+    // CSM→通常影へ戻す必要がある場合
+    if (this.shadowGenerator instanceof CascadedShadowGenerator) {
+      this._rebuildShadowGenerator();
+    }
+    this._syncPipelineFromSettings();
+    this._syncLightingForMaterialMode();
+    this._syncIblForMaterialMode();
+  }
+
   /** Standard / PBR でライト強度・環境色・スペキュラーを切り替える */
   _syncLightingForMaterialMode() {
     const levels = this.materialMode === "pbr" ? LIGHT_LEVELS_PBR : LIGHT_LEVELS_STANDARD;
     const keyMul = typeof this.settings.keyIntensityMul === "number" ? this.settings.keyIntensityMul : 1.0;
-    if (this.hemiLight) this.hemiLight.intensity = levels.hemi;
+    const darkness =
+      typeof this.settings.shadowDarkness === "number" ? this.settings.shadowDarkness : 0;
+
+    // PBR: 影の濃さに応じて埋め光（影非対応ライト）を減衰し、影内の白飛びを抑える
+    let hemiMul = 1;
+    let fillMul = 1;
+    let rimMul = 1;
+    let ambientMul = 1;
+    if (this.materialMode === "pbr") {
+      hemiMul = 1 - darkness * 0.7;
+      fillMul = 1 - darkness * 0.85;
+      rimMul = 1 - darkness * 0.35;
+      ambientMul = 1 - darkness * 0.5;
+    }
+
+    if (this.hemiLight) this.hemiLight.intensity = levels.hemi * hemiMul;
     if (this.keyLight) this.keyLight.intensity = levels.key * keyMul;
-    if (this.fillLight) this.fillLight.intensity = levels.fill;
-    if (this.rimLight) this.rimLight.intensity = levels.rim;
+    if (this.fillLight) this.fillLight.intensity = levels.fill * fillMul;
+    if (this.rimLight) this.rimLight.intensity = levels.rim * rimMul;
 
     // PBR では scene.ambientColor が拡散光に加算されるため低く抑えないとシャドウが白飛びしてコントラスト低下する
     if (this.materialMode === "pbr") {
-      this.scene.ambientColor = new Color3(0.1, 0.1, 0.12);
+      this.scene.ambientColor = new Color3(0.1 * ambientMul, 0.1 * ambientMul, 0.12 * ambientMul);
       if (this.hemiLight) this.hemiLight.specular = new Color3(0.15, 0.15, 0.15);
     } else {
       this.scene.ambientColor = new Color3(0.5, 0.5, 0.5);
@@ -443,8 +509,7 @@ export class RenderingManager {
   }
 
   setShadowEnabled(enabled) {
-    // PBR では影を常時有効（UI の ON/OFF は廃止済み）
-    const on = this.materialMode === "pbr" ? true : !!enabled;
+    const on = !!enabled;
     this.settings.shadowEnabled = on;
     if (this.keyLight) {
       this.keyLight.shadowEnabled = on;
@@ -466,6 +531,9 @@ export class RenderingManager {
     if (this.shadowGenerator && typeof this.shadowGenerator.setDarkness === "function") {
       this.shadowGenerator.setDarkness(next);
     }
+    // PBR: 埋め光・IBL も連動減衰（Standard では倍率 1 のまま）
+    this._syncLightingForMaterialMode();
+    this._syncIblForMaterialMode();
   }
 
   _setShadowResolution(size) {
@@ -666,8 +734,10 @@ export class RenderingManager {
     const p = this.pipeline;
     const s = this.settings;
     const heavyOff = this.xrMode;
+    // Bloom / DoF / Sharpen / MSAA は PBR 専用（Standard はトゥーン見た目を優先）
+    const pbrFx = this.materialMode === "pbr";
 
-    p.bloomEnabled = !heavyOff && !!s.bloom;
+    p.bloomEnabled = pbrFx && !heavyOff && !!s.bloom;
     if (p.bloomEnabled) {
       p.bloomThreshold = s.bloomThreshold;
       p.bloomWeight = s.bloomWeight;
@@ -676,14 +746,14 @@ export class RenderingManager {
     }
 
     p.fxaaEnabled = !!s.fxaa;
-    p.samples = heavyOff ? 1 : (s.msaa || 1);
+    p.samples = heavyOff || !pbrFx ? 1 : (s.msaa || 1);
 
-    p.sharpenEnabled = !heavyOff && !!s.sharpen;
+    p.sharpenEnabled = pbrFx && !heavyOff && !!s.sharpen;
     if (p.sharpenEnabled) {
       p.sharpen.edgeAmount = 0.2;
     }
 
-    p.depthOfFieldEnabled = !heavyOff && !!s.dof;
+    p.depthOfFieldEnabled = pbrFx && !heavyOff && !!s.dof;
     if (p.depthOfFieldEnabled) {
       p.depthOfFieldBlurLevel = 1;
       p.depthOfField.focalLength = 50;
@@ -691,7 +761,7 @@ export class RenderingManager {
       p.depthOfField.focusDistance = 2000;
     }
 
-    this._syncSsao(!heavyOff && !!s.ssao);
+    this._syncSsao(pbrFx && !heavyOff && !!s.ssao);
   }
 
   _syncSsao(enabled) {
@@ -810,7 +880,11 @@ export class RenderingManager {
       const intensity = typeof this.settings.iblIntensity === "number"
         ? this.settings.iblIntensity
         : 0.55;
-      this.scene.environmentIntensity = Math.max(0, intensity) * boost;
+      // 影の濃さに応じて実効 IBL を減衰（設定値 iblIntensity 自体は保持）
+      const darkness =
+        typeof this.settings.shadowDarkness === "number" ? this.settings.shadowDarkness : 0;
+      const darknessMul = 1 - darkness * 0.55;
+      this.scene.environmentIntensity = Math.max(0, intensity) * boost * darknessMul;
     }
   }
 
@@ -895,11 +969,21 @@ export class RenderingManager {
   // --- Material mode / XR ---
 
   setMaterialMode(mode) {
-    this.materialMode = mode === "pbr" ? "pbr" : "standard";
-    if (this.materialMode === "pbr") {
-      this.settings.ibl = true;
-      // IBL を強くしすぎるとモデル上の影が消える。未設定時のみ控えめな既定へ
-      if (!(this.settings.iblIntensity > 0)) {
+    const next = mode === "pbr" ? "pbr" : "standard";
+    const prev = this.materialMode;
+    this.materialMode = next;
+
+    if (next === "pbr") {
+      // Standard 滞在中に潰した PBR FX を復元（無ければプリセット既定）
+      const snap = this._pbrFxSnapshot;
+      // プリセット再適用で潰さない共通設定
+      const keepExposure = this.settings.exposure;
+      const keepFxaa = this.settings.fxaa;
+
+      this.settings.ibl = snap ? !!snap.ibl : true;
+      if (snap && typeof snap.iblIntensity === "number") {
+        this.settings.iblIntensity = snap.iblIntensity;
+      } else if (!(this.settings.iblIntensity > 0)) {
         this.settings.iblIntensity = 0.55;
       }
       // ACES tone mapping のトーン圧縮を補償し、PBR で少しシャープに見せる
@@ -908,23 +992,51 @@ export class RenderingManager {
       this.setContrast(this.settings.contrast);
       // モード切替時は影の濃さをモード既定へ合わせる（IBL で薄くならないよう濃くする）
       this.setShadowDarkness(SHADOW_DARKNESS_PBR);
-      // PBR では影を常時 ON（モデルはロード時にキャスタ登録）
-      this.setShadowEnabled(true);
-      this._fitShadowFrustumToCasters();
-      // モデル上の接触影感を補う（モバイルでは _syncSsao 側で無効）
-      if (this.resolvedQuality !== "low") {
+
+      // 品質プリセットをフル再適用（MSAA・Bloom 等。影 ON/OFF は維持）
+      const keepShadow = this.settings.shadowEnabled;
+      const cfg = QUALITY_PRESETS[this.resolvedQuality] || QUALITY_PRESETS.medium;
+      this._applyPreset(cfg);
+      this.setExposure(keepExposure);
+      this.settings.fxaa = keepFxaa;
+      this.setShadowEnabled(keepShadow);
+
+      // 手動トグル（DoF 等）とスナップショットをプリセットの上に重ねる
+      if (snap) {
+        if (typeof snap.bloom === "boolean") this.settings.bloom = snap.bloom;
+        if (typeof snap.dof === "boolean") this.settings.dof = snap.dof;
+        if (typeof snap.sharpen === "boolean") this.settings.sharpen = snap.sharpen;
+        if (typeof snap.ssao === "boolean") this.settings.ssao = snap.ssao;
+      } else if (this.resolvedQuality !== "low") {
         this.settings.ssao = true;
       }
+      this._fitShadowFrustumToCasters();
+      this._syncPipelineFromSettings();
+      this._syncIblForMaterialMode();
     } else {
+      // PBR 離脱前に FX を退避（復帰時用）
+      if (prev === "pbr") {
+        this._pbrFxSnapshot = {
+          bloom: !!this.settings.bloom,
+          dof: !!this.settings.dof,
+          sharpen: !!this.settings.sharpen,
+          ssao: !!this.settings.ssao,
+          ibl: !!this.settings.ibl,
+          iblIntensity: this.settings.iblIntensity
+        };
+      }
       if (this._savedContrast !== undefined) {
         this.settings.contrast = this._savedContrast;
         this.setContrast(this._savedContrast);
       }
       this.setShadowDarkness(SHADOW_DARKNESS_STANDARD);
+      // 解像度は維持しつつ Standard 固定設定へ
+      const cfg = QUALITY_PRESETS[this.resolvedQuality] || QUALITY_PRESETS.medium;
+      if (this.engine && cfg.pixelRatio) {
+        this.engine.setHardwareScalingLevel(1 / cfg.pixelRatio);
+      }
+      this._applyStandardBaseline();
     }
-    this._syncLightingForMaterialMode();
-    this._syncIblForMaterialMode();
-    this._syncPipelineFromSettings();
   }
 
   setXrMode(inXr) {

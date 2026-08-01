@@ -71,13 +71,16 @@ index.html
 
 ### グラフィックス強化（RenderingManager）
 
-- **品質プリセット**: auto / low / medium / high / ultra（端末スコア + 実測 FPS）。解像度スケール・シャドウ解像度もプリセットに一本化（個別 UI 廃止）
-- **影**: 低〜中は ShadowGenerator+PCF、高以上は CascadedShadowGenerator（numCascades=2）。濃さは UI 調整可（Standard 0.35 / PBR 0.75 既定）。ON/OFF UI は廃止。PBR では常時 ON、モデルはロード時にキャスト。セルフシャドウ用にフラスタム絞り込み + forceBackFacesOnly
-- **ポストFX**: DefaultRenderingPipeline（Bloom 既定OFF / FXAA / MSAA / DoF / シャープネス）
+- **マテリアル責務分離**:
+  - **Standard**（既定）: MMD トゥーン（`MmdStandardMaterialBuilder`、アウトライン無効）。品質プリセットは**解像度のみ**変更。Bloom / DoF / Sharpen / SSAO / IBL / MSAA は適用しない。影・rim は medium 相当で固定
+  - **PBR**: 品質プリセットが影・MSAA・Bloom 等を制御。IBL / SSAO / シネマティック FX あり。専用 UI は PBR 時のみ表示
+- **品質プリセット**: auto / low / medium / high / ultra（端末スコア + 実測 FPS）。PBR 時は解像度・シャドウ解像度もプリセットに一本化（個別 UI 廃止）
+- **影**: 低〜中は ShadowGenerator+PCF、高以上は CascadedShadowGenerator（numCascades=2）。**影 ON/OFF** は Standard / PBR 共通トグル（品質プリセットでは上書きしない）。濃さは UI 調整可（Standard 0.35 / PBR 0.75 既定）。**PBR では濃さに応じ hemi/fill/rim/ambient/IBL も連動減衰**（影内白飛び軽減）。モデルはロード時にキャスタ登録。フラスタム絞り込み + forceBackFacesOnly
+- **ポストFX**: DefaultRenderingPipeline。FXAA は両モード。Bloom / MSAA / DoF / シャープネスは **PBR のみ**
 - **SSAO2**: デスクトップ・medium以上 + PBR で有効。medium 以上で既定 ON（モデルの影感を補完）
-- **IBL**: `public/env/*.env` があれば `CreateFromPrefilteredData`、無ければ 128px キューブ生成。既定強度 0.55（高すぎるとセルフシャドウが消える）
-- **マテリアル**: Standard（既定） / PBR。切替は専用スナップショットで再ロード（YAML往復なし）
-- **PBR 照明最適化**: ambient / contrast / shadowDarkness / キー主体のライト比 / マテリアル environmentIntensity を影コントラスト優先で調整
+- **IBL**: `public/env/*.env` があれば `CreateFromPrefilteredData`、無ければ 128px キューブ生成。既定強度 0.55。**PBR のみ**適用（実効強度は影の濃さでさらに減衰）
+- **マテリアル切替**: 専用スナップショットで再ロード（YAML往復なし）。PBR FX 設定はモード離脱時にスナップショット退避
+- **PBR 照明最適化**: ambient / contrast / shadowDarkness 連動埋め光減衰 / キー主体のライト比 / マテリアル environmentIntensity≈0.42（肌材はさらに抑制）を影コントラスト優先で調整
 - **キーライトギズモ**: シーン中央に Unity 風の向き表示（黄球 + 平行レイ）。グラフィックスパネルで ON/OFF、`webmmd-graphics-settings` に永続化
 - **XR**: 入場時に SSAO / Bloom / DoF / シャープネス / CSM を OFF
 
@@ -86,7 +89,7 @@ index.html
 | ストレージ | キー | 内容 |
 |---|---|---|
 | IndexedDB | `webmmd-assets-db` | アセットフォルダハンドル |
-| localStorage | `webmmd-graphics-settings` | 品質・マテリアル・Bloom/IBL・影の濃さ 等 |
+| localStorage | `webmmd-graphics-settings` | 品質・マテリアル・Bloom/IBL・影 ON/OFF・影の濃さ 等 |
 | localStorage | 既存キー群 | FPS制限、物理無効、パネル状態など |
 
 ---

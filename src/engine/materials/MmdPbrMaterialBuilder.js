@@ -56,13 +56,33 @@ export class MmdPbrMaterialBuilder extends PBRMaterialBuilder {
 
     // IBL を抑え直射光（＋シャドウマップ）を主役にする。高い environmentIntensity は
     // 影領域を塗り潰してセルフシャドウを消す。
-    material.environmentIntensity = 0.55;
+    material.environmentIntensity = 0.42;
     material.directIntensity = 1.35;
     material.specularIntensity = 1.0;
+
+    // 肌・顔材はキーワード質感 OFF でも環境光寄与を抑え、影内の白飛びを緩和
+    this._applySkinShadowMitigation(material, materialInfo);
 
     if (this.keywordPresetsEnabled) {
       this._applyKeywordPreset(material, materialInfo);
     }
+  }
+
+  /** 材質名が肌・顔系かどうか（小文字化して判定） */
+  _isSkinMaterial(materialInfo) {
+    const name = (materialInfo.name || "").toLowerCase();
+    const skinKw = ["肌", "skin", "顔", "face", "体", "body", "手", "足"];
+    return skinKw.some((kw) => name.includes(kw));
+  }
+
+  /**
+   * 明るい顔テクスチャでも影コントラストが残るよう、肌材の env/direct を抑える。
+   * アルベドは触らない（モデル作者意図を維持）。
+   */
+  _applySkinShadowMitigation(material, materialInfo) {
+    if (!this._isSkinMaterial(materialInfo)) return;
+    material.environmentIntensity *= 0.75;
+    material.directIntensity = 1.2;
   }
 
   _applyKeywordPreset(material, materialInfo) {
@@ -81,7 +101,8 @@ export class MmdPbrMaterialBuilder extends PBRMaterialBuilder {
       material.metallic = 0.0;
       if (material.subSurface) {
         material.subSurface.isTranslucencyEnabled = true;
-        material.subSurface.translucencyIntensity = 0.15;
+        // 影側持ち上げを抑えるため translucency は控えめ
+        material.subSurface.translucencyIntensity = 0.08;
       }
     } else if (metalKw.some((kw) => name.includes(kw))) {
       material.metallic = 0.85;

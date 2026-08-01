@@ -45,43 +45,15 @@ export class BabylonEngine {
   drawTime = 0;
 
   setFpsLimit(limit) {
-    this.fpsLimit = typeof limit === "number" && !isNaN(limit) ? limit : null;
-    this.updateAnimationFrameRequester();
+    this.fpsLimit =
+      typeof limit === "number" && !isNaN(limit) && limit > 0 ? limit : null;
+    this.applyFpsLimit();
   }
 
-  updateAnimationFrameRequester() {
+  applyFpsLimit() {
     if (!this.engine) return;
-
-    if (this.fpsLimit === null) {
-      this.engine.customAnimationFrameRequester = null;
-      return;
-    }
-
-    const limit = this.fpsLimit;
-    let lastTime = performance.now();
-    const interval = 1000 / limit;
-
-    this.engine.customAnimationFrameRequester = {
-      requestID: null,
-      requestAnimationFrame: (callback) => {
-        const loop = () => {
-          const now = performance.now();
-          const delta = now - lastTime;
-          if (delta >= interval) {
-            lastTime = now - (delta % interval);
-            callback();
-          } else {
-            this.engine.customAnimationFrameRequester.requestID = requestAnimationFrame(loop);
-          }
-        };
-        this.engine.customAnimationFrameRequester.requestID = requestAnimationFrame(loop);
-      },
-      cancelAnimationFrame: () => {
-        if (this.engine.customAnimationFrameRequester && this.engine.customAnimationFrameRequester.requestID) {
-          cancelAnimationFrame(this.engine.customAnimationFrameRequester.requestID);
-        }
-      }
-    };
+    // Babylon.js v9 組み込みの maxFPS（skip-frame 方式）。XR の rAF と競合しない。
+    this.engine.maxFPS = this.fpsLimit === null ? undefined : this.fpsLimit;
   }
 
   _physicsViewer = null;
@@ -171,7 +143,7 @@ export class BabylonEngine {
       this.scene.render();
     });
 
-    this.updateAnimationFrameRequester();
+    this.applyFpsLimit();
 
     window.addEventListener("resize", this.handleResize);
     document.addEventListener("fullscreenchange", this.handleFullscreenChange);
@@ -261,7 +233,7 @@ export class BabylonEngine {
 
     const syncLayoutAndLoop = () => {
       if (!this.engine) return;
-      this.updateAnimationFrameRequester();
+      this.applyFpsLimit();
       this.engine.resize();
       if (typeof this.engine._renderLoop === "function") {
         this.engine._renderLoop();
