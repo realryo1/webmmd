@@ -296,16 +296,6 @@ export class BabylonEngine {
     this.renderingManager?.setShadowEnabled(enabled);
   }
 
-  setPixelRatio(ratio) {
-    if (this.engine) {
-      this.engine.setHardwareScalingLevel(1 / ratio);
-    }
-  }
-
-  setShadowResolution(size) {
-    this.renderingManager?.setShadowResolution(size);
-  }
-
   setShadowDarkness(v) {
     this.renderingManager?.setShadowDarkness(v);
   }

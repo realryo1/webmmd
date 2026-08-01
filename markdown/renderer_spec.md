@@ -91,8 +91,17 @@ index.html (#renderCanvas)
 
 `auto` / `low` / `medium` / `high` / `ultra`
 
+解像度スケール（`hardwareScaling`）とシャドウ解像度は品質プリセットが唯一の入口。システムパネルの個別 UI は廃止済み。
+
+| プリセット | pixelRatio | shadowMapSize | CSM | MSAA | 主な効果 |
+|---|---|---|---|---|---|
+| low | 1 | 512 | OFF | 0 | 影 OFF |
+| medium | 1 | 1024 | OFF | 0 | SSAO 既定 ON |
+| high | 1.5 | 2048 | ON | 2 | SSAO / シャープネス |
+| ultra | 2 | 2048 | ON | 4 | Bloom / SSAO / シャープネス |
+
 - auto: 端末スコア（cores / deviceMemory / mobile）+ 実測 FPS で切替
-- high: SSAO / シャープネス 既定 ON（PBR + デスクトップ環境向け）
+- DoF は手動トグル専用（プリセットでは上書きしない）
 - XR 入場時: SSAO / Bloom / DoF / シャープネス / CSM 強制 OFF（`setXrMode(true)`）
 
 ### 2.6 露出
@@ -116,7 +125,6 @@ index.html (#renderCanvas)
 | メソッド | 委譲先 |
 |---|---|
 | `setShadowEnabled` | `renderingManager.setShadowEnabled` |
-| `setShadowResolution` | `renderingManager.setShadowResolution` |
 | `setShadowDarkness` | `renderingManager.setShadowDarkness` |
 | `dirLight` / `hemiLight` / `shadowGenerator` | getter で RenderingManager を参照 |
 

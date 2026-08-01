@@ -79,31 +79,18 @@ export class UIManager {
 
     this.colorInput = document.querySelector(".color-input");
     this.backgroundModeSelect = document.querySelector(".mode-select");
-    this.shadowResolutionSelect = document.querySelector(".shadow-resolution-select");
 
     this._initGraphicsControls();
 
-    if (this.shadowResolutionSelect) {
-      const savedRes = localStorage.getItem("shadow-resolution") || "1024";
-      this.shadowResolutionSelect.value = savedRes;
-      if (this.engine && !isNaN(parseInt(savedRes, 10))) {
-        this.engine.setShadowResolution(parseInt(savedRes, 10));
-      }
-    }    
+    // 旧システムUIの永続化キー（画質上限・シャドウ解像度）を掃除
+    localStorage.removeItem("pixel-ratio");
+    localStorage.removeItem("shadow-resolution");
+
     this.gravityMagnitudeInput = document.querySelector(".gravity-magnitude-input");
     this.gravityMagnitudeValue = document.querySelector(".gravity-magnitude-value");
     this.breastPhysicsToggle = document.querySelector(".breast-physics-toggle");
     this.breastPhysicsInertiaInput = document.querySelector(".breast-physics-inertia-input");
     this.breastPhysicsInertiaValue = document.querySelector(".breast-physics-inertia-value");
-    
-    this.pixelRatioSelect = document.querySelector(".pixel-ratio-select");
-    if (this.pixelRatioSelect) {
-      const savedRatio = localStorage.getItem("pixel-ratio") || "1";
-      this.pixelRatioSelect.value = savedRatio;
-      if (this.engine) {
-        this.engine.setPixelRatio(parseFloat(savedRatio));
-      }
-    }
 
     this.vrPassthroughInput = document.querySelector(".vr-passthrough-toggle");
     if (this.vrPassthroughInput) {
@@ -539,20 +526,6 @@ export class UIManager {
       }
       const enabled = this.breastPhysicsToggle ? this.breastPhysicsToggle.checked : true;
       this.mmdManager.updateBreastPhysicsSettings(enabled, inertia);
-    });
-
-    // 画質上限
-    this.pixelRatioSelect?.addEventListener("change", () => {
-      const ratio = this.pixelRatioSelect.value;
-      localStorage.setItem("pixel-ratio", ratio);
-      this.engine.setPixelRatio(parseFloat(ratio));
-    });
-
-    // シャドウ解像度
-    this.shadowResolutionSelect?.addEventListener("change", () => {
-      const size = this.shadowResolutionSelect.value;
-      localStorage.setItem("shadow-resolution", size);
-      this.engine.setShadowResolution(parseInt(size, 10));
     });
 
     // パススルー

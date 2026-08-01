@@ -71,7 +71,7 @@ index.html
 
 ### グラフィックス強化（RenderingManager）
 
-- **品質プリセット**: auto / low / medium / high / ultra（端末スコア + 実測 FPS）
+- **品質プリセット**: auto / low / medium / high / ultra（端末スコア + 実測 FPS）。解像度スケール・シャドウ解像度もプリセットに一本化（個別 UI 廃止）
 - **影**: 低〜中は ShadowGenerator+PCF、高以上は CascadedShadowGenerator（numCascades=2）。濃さは UI 調整可（Standard 0.35 / PBR 0.75 既定）。ON/OFF UI は廃止。PBR では常時 ON、モデルはロード時にキャスト。セルフシャドウ用にフラスタム絞り込み + forceBackFacesOnly
 - **ポストFX**: DefaultRenderingPipeline（Bloom 既定OFF / FXAA / MSAA / DoF / シャープネス）
 - **SSAO2**: デスクトップ・medium以上 + PBR で有効。medium 以上で既定 ON（モデルの影感を補完）
@@ -87,7 +87,7 @@ index.html
 |---|---|---|
 | IndexedDB | `webmmd-assets-db` | アセットフォルダハンドル |
 | localStorage | `webmmd-graphics-settings` | 品質・マテリアル・Bloom/IBL・影の濃さ 等 |
-| localStorage | 既存キー群 | FPS制限、影解像度、物理無効、パネル状態など |
+| localStorage | 既存キー群 | FPS制限、物理無効、パネル状態など |
 
 ---
 

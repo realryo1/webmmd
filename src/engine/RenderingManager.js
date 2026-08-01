@@ -12,7 +12,6 @@ import { KeyLightGizmo } from "./KeyLightGizmo.js";
 
 const QUALITY_PRESETS = {
   low: {
-    label: "低",
     pixelRatio: 1,
     shadowEnabled: false,
     shadowMapSize: 512,
@@ -21,13 +20,11 @@ const QUALITY_PRESETS = {
     bloom: false,
     fxaa: true,
     msaa: 0,
-    dof: false,
     sharpen: false,
     ssao: false,
     exposure: 1.0
   },
   medium: {
-    label: "中",
     pixelRatio: 1,
     shadowEnabled: true,
     shadowMapSize: 1024,
@@ -36,14 +33,12 @@ const QUALITY_PRESETS = {
     bloom: false,
     fxaa: true,
     msaa: 0,
-    dof: false,
     sharpen: false,
     // PBR 時のセルフ影感を補う（_syncSsao 側で PBR+デスクトップのみ有効）
     ssao: true,
     exposure: 1.0
   },
   high: {
-    label: "高",
     pixelRatio: 1.5,
     shadowEnabled: true,
     shadowMapSize: 2048,
@@ -52,13 +47,11 @@ const QUALITY_PRESETS = {
     bloom: false,
     fxaa: true,
     msaa: 2,
-    dof: false,
     sharpen: true,
     ssao: true,
     exposure: 1.0
   },
   ultra: {
-    label: "最高",
     pixelRatio: 2,
     shadowEnabled: true,
     shadowMapSize: 2048,
@@ -67,7 +60,6 @@ const QUALITY_PRESETS = {
     bloom: true,
     fxaa: true,
     msaa: 4,
-    dof: false,
     sharpen: true,
     ssao: true,
     exposure: 1.0
@@ -279,10 +271,10 @@ export class RenderingManager {
   _applyPreset(cfg) {
     if (this.xrMode) {
       // XR 中は重い効果を強制OFF（後で setXrMode でも再適用）
+      // DoF は手動トグル専用のため上書きしない（パイプライン側で XR 中は無効化）
       Object.assign(this.settings, {
         ...cfg,
         bloom: false,
-        dof: false,
         sharpen: false,
         ssao: false,
         useCascadedShadows: false,
@@ -303,7 +295,7 @@ export class RenderingManager {
     // PBR では品質プリセットによらず影を常時 ON（低品質で OFF にしない）
     const shadowOn = this.materialMode === "pbr" ? true : !!this.settings.shadowEnabled;
     this.setShadowEnabled(shadowOn);
-    this.setShadowResolution(this.settings.shadowMapSize);
+    this._setShadowResolution(this.settings.shadowMapSize);
     this._syncPipelineFromSettings();
     this._syncLightingForMaterialMode();
     this._syncIblForMaterialMode();
@@ -476,7 +468,7 @@ export class RenderingManager {
     }
   }
 
-  setShadowResolution(size) {
+  _setShadowResolution(size) {
     const next = parseInt(size, 10) || 1024;
     this.settings.shadowMapSize = next;
 
@@ -761,11 +753,6 @@ export class RenderingManager {
     this._syncPipelineFromSettings();
   }
 
-  setMsaaSamples(n) {
-    this.settings.msaa = n;
-    this._syncPipelineFromSettings();
-  }
-
   // --- IBL ---
 
   async _loadIblAsync() {
@@ -967,40 +954,6 @@ export class RenderingManager {
     }
   }
 
-  /** UI / シリアライズ用スナップショット */
-  getSettingsSnapshot() {
-    return {
-      qualityPreset: this.qualityPreset,
-      resolvedQuality: this.resolvedQuality,
-      materialMode: this.materialMode,
-      ...this.settings
-    };
-  }
-
-  applySettingsSnapshot(snap) {
-    if (!snap) return;
-    if (snap.materialMode) this.setMaterialMode(snap.materialMode);
-    if (snap.qualityPreset) {
-      this.setQualityPreset(snap.qualityPreset);
-    }
-    if (typeof snap.shadowEnabled === "boolean") this.setShadowEnabled(snap.shadowEnabled);
-    if (snap.shadowMapSize) this.setShadowResolution(snap.shadowMapSize);
-    if (typeof snap.shadowDarkness === "number") this.setShadowDarkness(snap.shadowDarkness);
-    if (typeof snap.bloom === "boolean") this.setBloomEnabled(snap.bloom);
-    if (typeof snap.fxaa === "boolean") this.setFxaaEnabled(snap.fxaa);
-    if (typeof snap.dof === "boolean") this.setDofEnabled(snap.dof);
-    if (typeof snap.sharpen === "boolean") this.setSharpenEnabled(snap.sharpen);
-    if (typeof snap.ssao === "boolean") this.setSsaoEnabled(snap.ssao);
-    if (typeof snap.ibl === "boolean") this.setIblEnabled(snap.ibl);
-    if (typeof snap.iblIntensity === "number") this.setIblIntensity(snap.iblIntensity);
-    if (typeof snap.exposure === "number") this.setExposure(snap.exposure);
-    if (typeof snap.contrast === "number") this.setContrast(snap.contrast);
-    if (typeof snap.keyAzimuth === "number" || typeof snap.keyElevation === "number") {
-      this.setKeyLightDirection(snap.keyAzimuth, snap.keyElevation);
-    }
-    if (typeof snap.keyIntensityMul === "number") this.setKeyIntensityMul(snap.keyIntensityMul);
-  }
-
   dispose() {
     if (this._autoObserver) {
       this.scene.onAfterRenderObservable.remove(this._autoObserver);
@@ -1032,5 +985,3 @@ export class RenderingManager {
     }
   }
 }
-
-export { QUALITY_PRESETS };
