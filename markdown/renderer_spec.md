@@ -45,6 +45,7 @@ index.html (#renderCanvas)
 | key (`dirLight`) | 主光源・影キャスタ。方位角 / 高度で方向・位置を制御 |
 | fill | 影なし |
 | rim | 中品質以上。XR 中は OFF |
+| Standard ライト強度 | hemi `0.35` / key `0.52` / fill `0.1` / rim `0.14`（ambient 0.5 との重ねで肌白飛びを抑える） |
 | キーライトギズモ | `KeyLightGizmo`（Unity 風）。シーン中央 `(0,10,0)` に向きだけ表示。`setKeyLightGizmoVisible` で切替 |
 
 ### 2.2 影

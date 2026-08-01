@@ -66,12 +66,16 @@ const QUALITY_PRESETS = {
   }
 };
 
-/** Standard(トゥーン)向けのライト強度 */
+/**
+ * Standard(トゥーン)向けのライト強度。
+ * ambient 0.5（MMD 互換）と重ねるため、key/fill を抑え肌の白飛びを避ける。
+ * 総光量は旧 hemi0.5+dir0.7 に近い程度に保つ。
+ */
 const LIGHT_LEVELS_STANDARD = {
-  hemi: 0.45,
-  key: 0.7,
-  fill: 0.18,
-  rim: 0.22
+  hemi: 0.35,
+  key: 0.52,
+  fill: 0.1,
+  rim: 0.14
 };
 
 /**
@@ -183,7 +187,7 @@ export class RenderingManager {
       light.dispose();
     }
 
-    // 旧構成（hemi 0.5 + dir 0.7）に近い総光量を維持しつつ、フィル/リムは弱く足す
+    // フィル/リムは弱く足し、総光量は LIGHT_LEVELS_STANDARD で調整
     this.hemiLight = new HemisphericLight("hemiLight", new Vector3(0, 1, 0), this.scene);
     this.hemiLight.groundColor = new Color3(0.12, 0.12, 0.14);
     this.hemiLight.specular = new Color3(0, 0, 0);
