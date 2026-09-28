@@ -72,9 +72,10 @@ const QUALITY_PRESETS = {
  * 総光量は旧 hemi0.5+dir0.7 に近い程度に保つ。
  */
 const LIGHT_LEVELS_STANDARD = {
-  hemi: 0.35,
+  // fill はシェーダーコスト削減のため Standard では無効化し、その分を hemi に統合
+  hemi: 0.41,
   key: 0.52,
-  fill: 0.1,
+  fill: 0,
   rim: 0.14
 };
 
@@ -96,13 +97,25 @@ const SHADOW_DARKNESS_PBR = 0.75;
 
 /**
  * Standard(トゥーン)固定。品質プリセットでは解像度以外を触らない。
- * medium 相当（影 ON / CSM OFF / MSAA 無し）。
+ * デスクトップ: medium 相当（影 1024 / rim ON）。
+ * モバイル: 影 512 / rim OFF（144Hz で半レート落ちしにくい GPU 余裕を確保）。
  */
-const STANDARD_BASELINE = {
+const STANDARD_BASELINE_DESKTOP = {
   // shadowEnabled はユーザー UI が管理（ここでは上書きしない）
   shadowMapSize: 1024,
   useCascadedShadows: false,
   rimLight: true,
+  bloom: false,
+  msaa: 0,
+  sharpen: false,
+  ssao: false,
+  dof: false
+};
+
+const STANDARD_BASELINE_MOBILE = {
+  shadowMapSize: 512,
+  useCascadedShadows: false,
+  rimLight: false,
   bloom: false,
   msaa: 0,
   sharpen: false,
@@ -227,14 +240,35 @@ export class RenderingManager {
     this.setQualityPreset(this.qualityPreset);
   }
 
+  _isMobile() {
+    try {
+      return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
+   * 端末のリフレッシュレート（Hz）。取れなければ 60。
+   * Android 144Hz で 72 固定になる半レート落ちを auto 品質で検知するために使う。
+   */
+  _getTargetRefreshRate() {
+    try {
+      const hz = screen?.refreshRate;
+      if (typeof hz === "number" && hz >= 30 && hz <= 360) return hz;
+    } catch (_) {
+      // ignore
+    }
+    return 60;
+  }
+
   _scoreDevice() {
     let score = 50;
     try {
       const cores = navigator.hardwareConcurrency || 4;
       const mem = navigator.deviceMemory || 4;
-      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
       score = Math.min(100, cores * 8 + mem * 6);
-      if (isMobile) score *= 0.55;
+      if (this._isMobile()) score *= 0.55;
       if (this.engine) {
         const caps = this.engine.getCaps?.();
         if (caps && !caps.textureFloat) score *= 0.7;
@@ -250,11 +284,33 @@ export class RenderingManager {
     const avgFps = this._fpsSamples.length
       ? this._fpsSamples.reduce((a, b) => a + b, 0) / this._fpsSamples.length
       : 60;
+    // 60Hz 前提の絶対閾値だと 144Hz で 72fps（半レート）でも ultra のままになる。
+    // リフレッシュ比で判定し、半レート落ちを品質低下のトリガにする。
+    const refresh = this._getTargetRefreshRate();
+    const ratio = avgFps / refresh;
 
-    if (score < 30 || avgFps < 28) return "low";
-    if (score < 50 || avgFps < 40) return "medium";
-    if (score < 75 || avgFps < 52) return "high";
+    if (score < 30 || ratio < 0.45 || avgFps < 28) return "low";
+    if (score < 50 || ratio < 0.65 || avgFps < 40) return "medium";
+    if (score < 75 || ratio < 0.85 || avgFps < 52) return "high";
     return "ultra";
+  }
+
+  /** Standard は supersampling しない。PBR のモバイルは pixelRatio を 1 に上限。 */
+  _effectivePixelRatio(cfg) {
+    const raw = cfg?.pixelRatio || 1;
+    if (this.materialMode === "standard") return 1;
+    if (this._isMobile()) return Math.min(raw, 1);
+    return raw;
+  }
+
+  _applyPixelRatio(cfg) {
+    if (!this.engine) return;
+    const ratio = this._effectivePixelRatio(cfg);
+    this.engine.setHardwareScalingLevel(1 / ratio);
+  }
+
+  _getStandardBaseline() {
+    return this._isMobile() ? STANDARD_BASELINE_MOBILE : STANDARD_BASELINE_DESKTOP;
   }
 
   setQualityPreset(preset) {
@@ -291,11 +347,9 @@ export class RenderingManager {
   }
 
   _applyPreset(cfg) {
-    // Standard: 解像度（pixelRatio）のみ。影・ポストFX は STANDARD_BASELINE 固定
+    // Standard: 解像度は常に 1x。影・ポストFX は STANDARD_BASELINE 固定
     if (this.materialMode === "standard") {
-      if (this.engine && cfg.pixelRatio) {
-        this.engine.setHardwareScalingLevel(1 / cfg.pixelRatio);
-      }
+      this._applyPixelRatio(cfg);
       this._applyStandardBaseline();
       return;
     }
@@ -319,9 +373,7 @@ export class RenderingManager {
     }
     this.settings.shadowEnabled = keepShadow;
 
-    if (this.engine && cfg.pixelRatio) {
-      this.engine.setHardwareScalingLevel(1 / cfg.pixelRatio);
-    }
+    this._applyPixelRatio(cfg);
 
     if (this.rimLight) {
       this.rimLight.setEnabled(!!this.settings.rimLight && !this.xrMode);
@@ -329,6 +381,8 @@ export class RenderingManager {
 
     this.setShadowEnabled(keepShadow);
     this._setShadowResolution(this.settings.shadowMapSize);
+    this._syncShadowFilteringForMode();
+    this._syncShadowRefreshRate();
     this._syncPipelineFromSettings();
     this._syncLightingForMaterialMode();
     this._syncIblForMaterialMode();
@@ -340,7 +394,7 @@ export class RenderingManager {
     const fxaa = this.settings.fxaa;
     const exposure = this.settings.exposure;
     const shadowEnabled = this.settings.shadowEnabled;
-    Object.assign(this.settings, STANDARD_BASELINE, { fxaa, exposure, shadowEnabled });
+    Object.assign(this.settings, this._getStandardBaseline(), { fxaa, exposure, shadowEnabled });
 
     if (this.rimLight) {
       this.rimLight.setEnabled(!!this.settings.rimLight && !this.xrMode);
@@ -352,6 +406,8 @@ export class RenderingManager {
     if (this.shadowGenerator instanceof CascadedShadowGenerator) {
       this._rebuildShadowGenerator();
     }
+    this._syncShadowFilteringForMode();
+    this._syncShadowRefreshRate();
     this._syncPipelineFromSettings();
     this._syncLightingForMaterialMode();
     this._syncIblForMaterialMode();
@@ -378,7 +434,11 @@ export class RenderingManager {
 
     if (this.hemiLight) this.hemiLight.intensity = levels.hemi * hemiMul;
     if (this.keyLight) this.keyLight.intensity = levels.key * keyMul;
-    if (this.fillLight) this.fillLight.intensity = levels.fill * fillMul;
+    if (this.fillLight) {
+      // Standard では fill を完全に無効化（有効なライトはオフでもシェーダーに含まれるため）
+      this.fillLight.setEnabled(this.materialMode === "pbr");
+      this.fillLight.intensity = levels.fill * fillMul;
+    }
     if (this.rimLight) this.rimLight.intensity = levels.rim * rimMul;
 
     // PBR では scene.ambientColor が拡散光に加算されるため低く抑えないとシャドウが白飛びしてコントラスト低下する
@@ -452,6 +512,33 @@ export class RenderingManager {
 
   // --- Lights / Shadows ---
 
+  /**
+   * Standard デスクトップ: MEDIUM / Standard モバイル: LOW / PBR: HIGH
+   * （モバイルで PCF HIGH/MEDIUM は GPU 時間を押し上げ、144→72 の半レート落ちの主因になりやすい）
+   */
+  _shadowFilteringQuality() {
+    if (this.materialMode === "pbr") return ShadowGenerator.QUALITY_HIGH;
+    return this._isMobile() ? ShadowGenerator.QUALITY_LOW : ShadowGenerator.QUALITY_MEDIUM;
+  }
+
+  /** 影生成器を再構築せずにモード別フィルタ品質を反映する */
+  _syncShadowFilteringForMode() {
+    if (this.shadowGenerator) {
+      this.shadowGenerator.filteringQuality = this._shadowFilteringQuality();
+    }
+  }
+
+  /**
+   * Standard+モバイルは影マップを 2 フレームに 1 回更新。
+   * 毎フレーム影パスが VSync 予算をわずかに超えると Android が 72fps にロックするため。
+   */
+  _syncShadowRefreshRate() {
+    const map = this.shadowGenerator?.getShadowMap?.();
+    if (!map) return;
+    map.refreshRate =
+      this.materialMode === "standard" && this._isMobile() ? 2 : 1;
+  }
+
   _rebuildShadowGenerator() {
     const casters = [...this._casters];
     if (this.shadowGenerator) {
@@ -483,13 +570,13 @@ export class RenderingManager {
       csm.transparencyShadow = true;
       csm.forceBackFacesOnly = true;
       csm.usePercentageCloserFiltering = true;
-      csm.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+      csm.filteringQuality = this._shadowFilteringQuality();
       csm.setDarkness(darkness);
       this.shadowGenerator = csm;
     } else {
       const sg = new ShadowGenerator(size, this.keyLight);
       sg.usePercentageCloserFiltering = true;
-      sg.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+      sg.filteringQuality = this._shadowFilteringQuality();
       sg.bias = 0.0003;
       sg.normalBias = 0.003;
       sg.transparencyShadow = true;
@@ -501,6 +588,7 @@ export class RenderingManager {
     this.keyLight.shadowEnabled = !!this.settings.shadowEnabled;
     this._reapplyCasters(casters);
     this._fitShadowFrustumToCasters();
+    this._syncShadowRefreshRate();
   }
 
   _reapplyCasters(casters = [...this._casters]) {
@@ -684,12 +772,29 @@ export class RenderingManager {
     const ipc = this.scene.imageProcessingConfiguration;
     if (!ipc) return;
     ipc.isEnabled = true;
-    // DefaultRenderingPipeline 側で一度だけ適用し、マテリアルシェーダとの二重露出を防ぐ
-    ipc.applyByPostProcess = true;
     ipc.toneMappingEnabled = true;
     ipc.toneMappingType = 1; // ACES
     ipc.exposure = this.settings.exposure;
     ipc.contrast = this.settings.contrast;
+    this._syncImageProcessingMode();
+  }
+
+  /**
+   * トーンマップ/露出の適用方法をモード別に切り替える。
+   * - PBR: ポストプロセスで一括適用（マテリアルとの二重露出を防ぐ）
+   * - Standard: マテリアルシェーダー内でインライン適用。
+   *   オフスクリーンRT + 全画面パスを丸ごと省けるため大幅に軽い。
+   *   （副作用: GridMaterial 等の非対応マテリアルにはトーンマップがかからない）
+   */
+  _syncImageProcessingMode() {
+    const byPost = this.materialMode === "pbr";
+    const ipc = this.scene.imageProcessingConfiguration;
+    if (ipc && ipc.applyByPostProcess !== byPost) {
+      ipc.applyByPostProcess = byPost;
+    }
+    if (this.pipeline && this.pipeline.imageProcessingEnabled !== byPost) {
+      this.pipeline.imageProcessingEnabled = byPost;
+    }
   }
 
   setExposure(value) {
@@ -720,11 +825,8 @@ export class RenderingManager {
     );
     this.pipeline.bloomEnabled = false;
     this.pipeline.fxaaEnabled = true;
-    this.pipeline.imageProcessingEnabled = true;
-    // ポストプロセス経由の IP を有効にし、フラグメント側との二重適用を避ける
-    if (this.scene.imageProcessingConfiguration) {
-      this.scene.imageProcessingConfiguration.applyByPostProcess = true;
-    }
+    // トーンマップ適用方法（ポスト or インライン）はモード別に同期
+    this._syncImageProcessingMode();
     this.pipeline.sharpenEnabled = false;
     this.pipeline.depthOfFieldEnabled = false;
     // Bloom 既定を肌が滲まない高めの閾値に
@@ -740,6 +842,8 @@ export class RenderingManager {
     const heavyOff = this.xrMode;
     // Bloom / DoF / Sharpen / MSAA は PBR 専用（Standard はトゥーン見た目を優先）
     const pbrFx = this.materialMode === "pbr";
+    // モバイル Standard は全画面パスを避け、144Hz の半レート落ちを抑える
+    const allowFxaa = !(this.materialMode === "standard" && this._isMobile());
 
     p.bloomEnabled = pbrFx && !heavyOff && !!s.bloom;
     if (p.bloomEnabled) {
@@ -749,8 +853,9 @@ export class RenderingManager {
       p.bloomScale = 0.5;
     }
 
-    p.fxaaEnabled = !!s.fxaa;
+    p.fxaaEnabled = allowFxaa && !!s.fxaa;
     p.samples = heavyOff || !pbrFx ? 1 : (s.msaa || 1);
+    this._syncImageProcessingMode();
 
     p.sharpenEnabled = pbrFx && !heavyOff && !!s.sharpen;
     if (p.sharpenEnabled) {
@@ -778,7 +883,7 @@ export class RenderingManager {
       enabled &&
       this.materialMode === "pbr" &&
       qualityOk &&
-      !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      !this._isMobile();
 
     if (!allow) {
       if (this.ssaoPipeline) {
@@ -1034,11 +1139,9 @@ export class RenderingManager {
         this.setContrast(this._savedContrast);
       }
       this.setShadowDarkness(SHADOW_DARKNESS_STANDARD);
-      // 解像度は維持しつつ Standard 固定設定へ
+      // Standard 固定設定へ（解像度は supersampling 無し）
       const cfg = QUALITY_PRESETS[this.resolvedQuality] || QUALITY_PRESETS.medium;
-      if (this.engine && cfg.pixelRatio) {
-        this.engine.setHardwareScalingLevel(1 / cfg.pixelRatio);
-      }
+      this._applyPixelRatio(cfg);
       this._applyStandardBaseline();
     }
   }

@@ -43,9 +43,9 @@ index.html (#renderCanvas)
 | ambientColor | Standard: `(0.5, 0.5, 0.5)` / PBR: `(0.1, 0.1, 0.12)`（モード切替時に自動調整） |
 | HemisphericLight | Standard: specular `(0,0,0)` / PBR: specular `(0.15, 0.15, 0.15)` |
 | key (`dirLight`) | 主光源・影キャスタ。方位角 / 高度で方向・位置を制御 |
-| fill | 影なし |
-| rim | 中品質以上。XR 中は OFF |
-| Standard ライト強度 | hemi `0.35` / key `0.52` / fill `0.1` / rim `0.14`（ambient 0.5 との重ねで肌白飛びを抑える） |
+| fill | 影なし。**Standard では無効**（ライト数削減による軽量化。光量は hemi に統合） |
+| rim | Standard デスクトップ: ON / Standard モバイル・XR: OFF |
+| Standard ライト強度 | hemi `0.41` / key `0.52` / fill `0`（無効） / rim `0.14`（ambient 0.5 との重ねで肌白飛びを抑える） |
 | キーライトギズモ | `KeyLightGizmo`（Unity 風）。シーン中央 `(0,10,0)` に向きだけ表示。`setKeyLightGizmoVisible` で切替 |
 
 ### 2.2 影
@@ -56,6 +56,8 @@ index.html (#renderCanvas)
 | high〜ultra | `CascadedShadowGenerator`（`numCascades=2`, `autoCalcDepthBounds=false`） |
 
 - bias / normalBias は MMD スケール向けに調整
+- PCF フィルタ品質: Standard デスクトップ `MEDIUM` / Standard モバイル `LOW` / PBR `HIGH`
+- Standard モバイル: 影マップ 512 + `refreshRate=2`（隔フレーム更新。144Hz で半レート落ちしにくくする）
 - 半透明マテリアルはキャスタ除外
 - `receiveShadows` をモデル配下で有効化（モデルは cast + receive = 自己影あり）
 - `settings.shadowEnabled`（既定 `true`）: 全体の影 ON/OFF。`setShadowEnabled` で即時反映。Standard / PBR 共通。品質プリセットでは上書きしない
@@ -75,12 +77,19 @@ index.html (#renderCanvas)
 | 効果 | Standard | PBR 既定 |
 |---|---|---|
 | Bloom | 無効（適用しない） | OFF（ultra で ON） |
-| FXAA | 有効（ユーザー切替可） | ON |
+| FXAA | 有効（ユーザー切替可）。**モバイル Standard では強制 OFF**（全画面パス回避） | ON |
 | MSAA | 無効（samples=1） | プリセット依存 |
 | DoF | 無効 | OFF（手動トグル） |
 | シャープネス | 無効 | OFF（high / ultra で ON） |
 
 `SSAO2RenderingPipeline`: デスクトップ + medium以上 + **PBR のみ**。medium 以上で既定 ON。未使用時は dispose。
+
+**トーンマップ / 露出の適用方法（`_syncImageProcessingMode`）:**
+
+- PBR: `applyByPostProcess=true`（ポストプロセスで一括適用）
+- Standard: `applyByPostProcess=false`（マテリアルシェーダー内でインライン適用）。
+  オフスクリーン RT + 全画面画像処理パスを丸ごと省略でき、FXAA OFF ならポストプロセス完全ゼロで直接描画になる（240fps 級の軽量化）
+- 副作用: Standard では GridMaterial / ShadowOnlyMaterial / clearColor 等の非対応部にトーンマップ・露出がかからない（モデルには適用される）
 
 ### 2.4 IBL
 
@@ -94,9 +103,9 @@ index.html (#renderCanvas)
 
 `auto` / `low` / `medium` / `high` / `ultra`
 
-**Standard**: `pixelRatio`（`hardwareScaling`）のみ変更。影・rim・MSAA・Bloom 等は `STANDARD_BASELINE`（medium 相当: 影 ON / 1024 / CSM OFF / rim ON）で固定。
+**Standard**: `pixelRatio` は常に 1（supersampling しない）。影・rim 等は `STANDARD_BASELINE`（デスクトップ: 影 1024 / rim ON、モバイル: 影 512 / rim OFF）。
 
-**PBR**: 解像度スケールとシャドウ解像度もプリセットが唯一の入口。システムパネルの個別 UI は廃止済み。
+**PBR**: 解像度スケールとシャドウ解像度もプリセットが唯一の入口。システムパネルの個別 UI は廃止済み。モバイルは `pixelRatio` 上限 1。
 
 | プリセット | pixelRatio | shadowMapSize | CSM | MSAA | 主な効果（PBR） |
 |---|---|---|---|---|---|
@@ -107,7 +116,7 @@ index.html (#renderCanvas)
 
 ※ 影 ON/OFF はユーザー UI が優先（プリセットの `shadowEnabled` は適用しない）
 
-- auto: 端末スコア（cores / deviceMemory / mobile）+ 実測 FPS で切替
+- auto: 端末スコア + 実測 FPS / `screen.refreshRate` 比で切替（144Hz で 72fps＝半レートでも品質を落とせる）
 - DoF は手動トグル専用（プリセットでは上書きしない）
 - XR 入場時: SSAO / Bloom / DoF / シャープネス / CSM 強制 OFF（`setXrMode(true)`）
 
@@ -137,6 +146,13 @@ index.html (#renderCanvas)
 | `dirLight` / `hemiLight` / `shadowGenerator` | getter で RenderingManager を参照 |
 
 その他（重力・背景・FPS制限・XR 復元・PhysicsViewer）は従来どおり。
+
+**エンジン/シーンの軽量化設定:**
+
+- `preserveDrawingBuffer: false` / `adaptToDeviceRatio: false`
+- `powerPreference: "high-performance"`
+- モバイルは `antialias: false`（MSAA オフ）
+- `scene.skipPointerMovePicking = true`
 
 ---
 

@@ -60,9 +60,14 @@ export class BabylonEngine {
   _showPhysicsViewer = false;
 
   async initialize(canvas) {
-    this.engine = new Engine(canvas, true, {
-      preserveDrawingBuffer: true,
-      stencil: true
+    // モバイルは MSAA（antialias）を切る。GPU 時間が増えると 144Hz が 72Hz に半レートロックしやすい
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    this.engine = new Engine(canvas, !isMobile, {
+      // canvas のピクセルを直接読む機能は無いため false（描画バッファ保持はコピーが発生し高FPSの妨げになる）
+      preserveDrawingBuffer: false,
+      stencil: true,
+      powerPreference: "high-performance",
+      adaptToDeviceRatio: false
     });
 
     // SDEF: Engine 生成直後、ShadowGenerator より前
@@ -70,6 +75,9 @@ export class BabylonEngine {
 
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.04, 0.07, 0.09, 1.0);
+    // scene.pick は未使用のため、pointermove ごとのメッシュピッキングを止める
+    // （高ポリの MMD メッシュに対する picking は CPU 負荷が大きい）
+    this.scene.skipPointerMovePicking = true;
 
     const havokInstance = await HavokPhysics({
       locateFile: () => havokWasmUrl
